@@ -10,10 +10,10 @@
 <link rel="icon" href="/icone-192.png">
 <link rel="apple-touch-icon" href="/icone-192.png">
 <link rel="manifest" href="/manifest.webmanifest">
-<link rel="stylesheet" href="/guia.css?v=cartas-a-flora-7">
+<link rel="stylesheet" href="/guia.css?v=cartas-a-flora-8">
 <script src="/prazo.js?v=1" defer></script>
-<script src="/reflora-preview.js?v=1" defer></script>
-<script src="/guia.js?v=cartas-a-flora-7" defer></script>
+<script src="/reflora-preview.js?v=2" defer></script>
+<script src="/guia.js?v=cartas-a-flora-8" defer></script>
 <title>Cartas à Flora · Plantas ameaçadas do Brasil</title>
 </head>
 <body>
@@ -66,5 +66,10 @@
 </main>
 <footer class="foot"><a href="#sobre">Sobre o projeto</a><a href="#sobre">Instalação e leitura offline</a><span>Brasil · 2026</span></footer>
 <dialog id="adoption-dialog" class="adoption-dialog" aria-labelledby="adoption-title"></dialog>
+<dialog id="plate-viewer" class="plate-viewer" aria-label="Imagem ampliada">
+  <div class="plate-viewer-top"><button type="button" id="close-plate" class="button outline" autofocus>Fechar <span aria-hidden="true">×</span></button></div>
+  <div id="plate-viewer-media" class="plate-viewer-media"></div>
+  <div id="plate-viewer-credit" class="plate-viewer-credit"></div>
+</dialog>
 </body>
 </html>

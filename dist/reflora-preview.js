@@ -6,10 +6,10 @@ function refloraImageSource(entry) {
     encodeURIComponent(entry[2]);
 }
 
-async function drawRefloraPreview(canvas, path) {
+async function drawRefloraPreview(canvas, path, detailed = false) {
   if (!/^(?:[0-9]+\/)+[0-9]+(?:[-_][0-9]+)?$/.test(path)) throw new Error('Imagem inválida');
   const base = rbImageBase + path;
-  const signal = AbortSignal.timeout(16000);
+  const signal = AbortSignal.timeout(detailed ? 22000 : 16000);
   const response = await fetch(base + '.dzi', {signal});
   if (!response.ok) throw new Error('Imagem indisponível');
   const xml = new DOMParser().parseFromString(await response.text(), 'application/xml');
@@ -28,7 +28,7 @@ async function drawRefloraPreview(canvas, path) {
   }
 
   const maxLevel = Math.ceil(Math.log2(Math.max(width, height)));
-  let level = Math.min(maxLevel, 9);
+  let level = Math.min(maxLevel, detailed ? 11 : 9);
   let scale, w, h, cols, rows;
   do {
     scale = 2 ** (level - maxLevel);
@@ -36,7 +36,7 @@ async function drawRefloraPreview(canvas, path) {
     h = Math.ceil(height * scale);
     cols = Math.ceil(w / tile);
     rows = Math.ceil(h / tile);
-    if (cols * rows <= 12) break;
+    if (cols * rows <= (detailed ? 56 : 12)) break;
     level -= 1;
   } while (level >= 0);
   if (!canvas.isConnected) return;
@@ -57,7 +57,7 @@ async function drawRefloraPreview(canvas, path) {
   }
 }
 
-function observeRefloraPreview(figure, entry, fallback) {
+function observeRefloraPreview(figure, entry, fallback, onReady) {
   const canvas = figure.querySelector('canvas');
   const notice = figure.querySelector('.rb-progress');
   const load = async () => {
@@ -67,6 +67,7 @@ function observeRefloraPreview(figure, entry, fallback) {
       if (!figure.isConnected) return;
       canvas.hidden = false;
       notice.remove();
+      onReady?.(canvas);
     } catch {
       if (!figure.isConnected) return;
       if (fallback) fallback();

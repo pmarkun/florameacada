@@ -457,6 +457,68 @@ async function loadLetter(section,id,label) {
     section.querySelector('button').onclick = () => loadLetter(section,id,label);
   }
 }
+const plateViewer = $('plate-viewer');
+const viewerMedia = $('plate-viewer-media');
+const viewerCredit = $('plate-viewer-credit');
+let viewerOpener = null;
+let viewerWentFullscreen = false;
+
+function addPlateViewer(figure, image, deepZoom) {
+  const button = document.createElement('button');
+  button.className = 'button outline plate-enlarge';
+  button.type = 'button';
+  button.textContent = 'Ampliar imagem';
+  button.addEventListener('click', () => openPlateViewer(figure, image, deepZoom, button));
+  figure.append(button);
+}
+
+async function openPlateViewer(figure, source, deepZoom, opener) {
+  viewerOpener = opener;
+  viewerWentFullscreen = false;
+  const preview = source.cloneNode();
+  if (source instanceof HTMLCanvasElement) preview.getContext('2d').drawImage(source, 0, 0);
+  preview.hidden = false;
+  viewerMedia.replaceChildren(preview);
+  const caption = figure.querySelector('figcaption');
+  viewerCredit.replaceChildren(...(caption ? [...caption.childNodes].map((node) => node.cloneNode(true)) : []));
+  viewerCredit.hidden = !caption;
+  plateViewer.showModal();
+  plateViewer.requestFullscreen?.().catch(() => {});
+
+  if (deepZoom) {
+    const detail = preview.cloneNode();
+    detail.hidden = true;
+    viewerMedia.append(detail);
+    try {
+      await drawRefloraPreview(detail, deepZoom[0], true);
+      if (detail.isConnected && plateViewer.open) {
+        detail.hidden = false;
+        preview.remove();
+      }
+    } catch {
+      detail.remove();
+    }
+  }
+}
+
+$('close-plate').onclick = () => plateViewer.close();
+viewerMedia.onclick = (event) => { if (event.target === viewerMedia) plateViewer.close(); };
+document.addEventListener('fullscreenchange', () => {
+  if (document.fullscreenElement === plateViewer) {
+    if (!plateViewer.open) document.exitFullscreen().catch(() => {});
+    else viewerWentFullscreen = true;
+  } else if (viewerWentFullscreen && plateViewer.open) {
+    plateViewer.close();
+  }
+});
+plateViewer.addEventListener('close', () => {
+  if (document.fullscreenElement === plateViewer) document.exitFullscreen().catch(() => {});
+  viewerMedia.replaceChildren();
+  viewerCredit.replaceChildren();
+  if (viewerOpener?.isConnected) viewerOpener.focus();
+  viewerOpener = null;
+});
+
 function renderReader(item) {
   const [id, name, family, risk, isNew, review] = item;
   const feature = features[name];
@@ -540,19 +602,29 @@ function renderReader(item) {
     '</span><button class="button outline" id="next" ' + (next ? '' : 'disabled') + '>Próxima →</button></nav>' +
     '<p id="reader-status" class="muted" role="status"></p>';
   function watchImage() {
-    const importedImage = useImported && $('especie').querySelector('.feature-plate img');
-    if (importedImage) importedImage.addEventListener('error',() => {
-      const plate = importedImage.closest('figure');
-      plate.outerHTML = '<figure class="feature-plate empty-plate"><figcaption>' +
+    const figure = $('especie').querySelector('.feature-plate');
+    const image = figure.querySelector('img');
+    if (!image) return;
+    const ready = () => { if (figure.isConnected) addPlateViewer(figure, image); };
+    const failed = () => {
+      if (!figure.isConnected || !useImported) return;
+      figure.outerHTML = '<figure class="feature-plate empty-plate"><figcaption>' +
         '<span>Imagem indisponível</span>' + anchor(['Ver prancha na fonte',imported.page]) + '</figcaption></figure>';
-    },{once:true});
+    };
+    if (image.complete) {
+      if (image.naturalWidth) ready();
+      else failed();
+    } else {
+      image.addEventListener('load', ready, {once:true});
+      image.addEventListener('error', failed, {once:true});
+    }
   }
   if (useRb) {
     const rbFigure = $('especie').querySelector('.rb-plate');
     observeRefloraPreview(rbFigure, rb, importedPlate ? () => {
       rbFigure.outerHTML = regularPlate;
       watchImage();
-    } : undefined);
+    } : undefined, (canvas) => addPlateViewer(rbFigure, canvas, rb));
   } else {
     watchImage();
   }
@@ -641,6 +713,7 @@ async function route() {
   const [part, idText] = key.split('/');
   if (part === 'conteudo') return;
   if ($('adoption-dialog').open) $('adoption-dialog').close();
+  if (plateViewer.open) plateViewer.close();
   const section = sections.some((item) => item.id === part) ? part : 'capa';
   sections.forEach((item) => item.hidden = item.id !== section);
   document.querySelectorAll('[data-nav]').forEach((link) => {
@@ -699,7 +772,7 @@ document.addEventListener('click', (e) => {
   else readerScope = null;
 });
 document.addEventListener('keydown', (e) => {
-  if ($('adoption-dialog').open || active !== 'especie' || e.altKey || e.metaKey || e.ctrlKey || e.target.matches('input,select,textarea')) return;
+  if ($('adoption-dialog').open || plateViewer.open || active !== 'especie' || e.altKey || e.metaKey || e.ctrlKey || e.target.matches('input,select,textarea')) return;
   if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
     e.preventDefault();
     $(e.key === 'ArrowLeft' ? 'prev' : 'next')?.click();
