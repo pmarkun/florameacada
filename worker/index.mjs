@@ -51,12 +51,12 @@ async function letterState(env, id) {
   if (row) return {state:'published', letter:row.body, author:row.author_name};
   const state = await db.prepare(
     'SELECT EXISTS(SELECT 1 FROM letter_submissions WHERE plant_id=?) AS in_review, ' +
-    'EXISTS(SELECT 1 FROM writing_reservations WHERE plant_id=? AND expires_at>? ' +
-    'AND sent_at IS NOT NULL) AS reserved'
+    '(SELECT expires_at FROM writing_reservations WHERE plant_id=? AND expires_at>? ' +
+    'AND sent_at IS NOT NULL) AS expires_at'
   ).bind(id, id, now()).first();
-  return {state:state.in_review ? 'review' : state.reserved ? 'reserved' : 'available',
-    reservationByEmail:mailEnabled(env)};
-
+  return {state:state.in_review ? 'review' : state.expires_at ? 'reserved' : 'available',
+    reservationByEmail:mailEnabled(env),
+    ...(!state.in_review && state.expires_at ? {expiresAt:state.expires_at} : {})};
 }
 
 function letterFields(data) {
@@ -118,15 +118,15 @@ async function reserveWriting(request, env, plantId) {
     "created_at=excluded.created_at,expires_at=excluded.expires_at,sent_at=NULL,author_name='',body='',version=0 " +
     'WHERE writing_reservations.expires_at <= ? OR ' +
     '(writing_reservations.sent_at IS NULL AND writing_reservations.created_at <= ?) ' +
-    'RETURNING id,email,sent_at'
+    'RETURNING id,email,sent_at,expires_at'
   ).bind(plantId, id, tokenHash, email, timestamp, timestamp + reservationSeconds, plantId,
     timestamp, timestamp - deliverySeconds).first();
   const row = created || await env.DB.prepare(
-    'SELECT id,email,sent_at FROM writing_reservations WHERE plant_id = ? AND email = ? AND expires_at > ? ' +
+    'SELECT id,email,sent_at,expires_at FROM writing_reservations WHERE plant_id = ? AND email = ? AND expires_at > ? ' +
     'AND NOT EXISTS (SELECT 1 FROM letter_submissions WHERE plant_id = ?)'
   ).bind(plantId, email, timestamp, plantId).first();
   if (!row) return json({error:'Esta planta já tem uma reserva ou uma carta.'}, 409);
-  if (row.sent_at) return json({state:'reserved'});
+  if (row.sent_at) return json({state:'reserved', expiresAt:row.expires_at});
   const name = plantNames.get(plantId);
   const link = new URL('/escrever', request.url);
   link.hash = await writingToken(env, row.id);
@@ -147,7 +147,7 @@ async function reserveWriting(request, env, plantId) {
   }
   await env.DB.prepare('UPDATE writing_reservations SET sent_at = ? WHERE id = ? AND sent_at IS NULL')
     .bind(now(), row.id).run();
-  return json({state:'reserved'}, 201);
+  return json({state:'reserved', expiresAt:row.expires_at}, 201);
 }
 
 async function writingDesk(request, env) {
@@ -168,7 +168,7 @@ async function writingDesk(request, env) {
       name:row.submitted_name, letter:row.submitted_body});
   }
   if (data.action === 'open') {
-    return json({plant, state:'draft', name:row.author_name, letter:row.body, version:row.version});
+    return json({plant, state:'draft', name:row.author_name, letter:row.body, version:row.version, expiresAt:row.expires_at});
   }
 
   const name = textInput(data.name);

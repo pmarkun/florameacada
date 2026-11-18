@@ -10,6 +10,8 @@ const submit = get('submit');
 let version;
 let savedText = '';
 let savedName = '';
+let expired = false;
+let stopDeadline = () => {};
 
 async function desk(action, values = {}) {
   const response = await fetch('/api/cartas/caderno', {
@@ -34,6 +36,8 @@ function updateWarning() {
 }
 
 function submitted(state) {
+  stopDeadline();
+  get('deadline').hidden = true;
   removeEventListener('beforeunload', warnUnsaved);
   letter.readOnly = true;
   author.readOnly = true;
@@ -44,6 +48,7 @@ function submitted(state) {
 }
 
 async function persist(action) {
+  if (expired) return;
   if (action === 'submit' && (!letter.value.trim() || !author.value.trim())) {
     status.textContent = 'Preencha o texto e a assinatura antes de enviar.';
     (letter.value.trim() ? author : letter).focus();
@@ -68,7 +73,7 @@ async function persist(action) {
       'Não foi possível confirmar. Confira a conexão e tente novamente.' : error.message;
   } finally {
     if (!save.hidden) letter.readOnly = author.readOnly = false;
-    save.disabled = submit.disabled = false;
+    save.disabled = submit.disabled = expired;
   }
 }
 
@@ -88,7 +93,15 @@ async function openDesk() {
     savedName = author.value = data.name;
     notice.hidden = true;
     form.hidden = false;
-    if (data.state !== 'draft') submitted(data.state);
+    if (data.state !== 'draft') {
+      submitted(data.state);
+    } else {
+      stopDeadline = showReservationDeadline(get('deadline'), data.expiresAt, () => {
+        expired = true;
+        save.disabled = submit.disabled = true;
+        status.textContent = 'O prazo terminou. Você ainda pode copiar o texto desta página.';
+      });
+    }
   } catch (error) {
     notice.textContent = error.message === 'Failed to fetch' || error.name === 'TimeoutError' ?
       'O caderno não carregou. Confira a conexão e atualize a página.' : error.message;

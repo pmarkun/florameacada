@@ -321,7 +321,9 @@ function showLetter(section, id, label, data) {
     return;
   }
   if (data.state === 'reserved') {
-    section.innerHTML = '<p class="letter-note">Esta planta está reservada. Use o link que recebeu por e-mail para escrever.</p>';
+    section.innerHTML = '<p class="letter-note">Esta planta está reservada. Use o link que recebeu por e-mail para escrever.</p>' +
+      '<p class="letter-note reservation-deadline"><time hidden></time></p>';
+    showReservationDeadline(section.querySelector('time'), data.expiresAt);
     return;
   } else {
     section.innerHTML = '<button type="button" class="button ink-button">Quero reservar essa planta.</button>';
@@ -362,7 +364,11 @@ function openLetterForm(section, id, label, opener, reservationByEmail) {
       }
       if (section.isConnected) {
         section.innerHTML = '<p class="letter-invite" role="status" tabindex="-1">' +
-          (reservationByEmail ? 'Confira seu e-mail para abrir o caderno.' : 'Sua carta foi enviada para moderação.') + '</p>';
+          (reservationByEmail ? 'Confira seu e-mail para abrir o caderno.' : 'Sua carta foi enviada para moderação.') + '</p>' +
+          (reservationByEmail ? '<p class="letter-note reservation-deadline"><time hidden></time></p>' : '');
+        if (reservationByEmail) {
+          showReservationDeadline(section.querySelector('time'), response.expiresAt);
+        }
       }
       if (form.isConnected && dialog.open) {
         dialog.close();
