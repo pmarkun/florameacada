@@ -214,6 +214,38 @@ const naturalList = (items, last = 'e') => {
   return unique.slice(0,-1).join(', ') + ' ' + last + ' ' + unique.at(-1);
 };
 
+const taxonLink = (profile) => 'https://reflora.jbrj.gov.br/reflora/listaBrasil/FichaPublicaTaxonUC/FichaPublicaTaxonUC.do?id=FB' +
+  encodeURIComponent(profile.id);
+const taxonName = (name) => name ? '<i>' + esc(name) + '</i>' : '';
+
+function scientificFacts(item, profile) {
+  const [id, name, family, risk] = item;
+  const feature = features[name];
+  const list = (values = []) => esc([...new Set(values.filter(Boolean))].join(', '));
+  const endemism = {'Endemica':'Endêmica do Brasil','Não endemica':'Também ocorre fora do Brasil'};
+  const accepted = profile?.nome;
+  const rows = [
+    [accepted ? 'Nome aceito no JBRJ' : 'Nome científico na Portaria', taxonName(accepted || name)],
+    ['Autoria botânica', profile?.autoria && esc(profile.autoria)],
+    ['Nome na Portaria', accepted && normalize(accepted) !== normalize(name) && taxonName(name)],
+    ['Família na Portaria', esc(family)],
+    ['Categoria de risco no Brasil', esc(risk + ' · ' + risks[risk][0])],
+    ['Nomes populares', list([feature?.common, ...(profile?.popular ?? [])])],
+    ['Sinônimos', profile?.sinonimos?.map(taxonName).join(', ')],
+    ['Hábito', list(profile?.habito)],
+    ['Substrato', list(profile?.substrato)],
+    ['Domínios fitogeográficos', list(profile?.dominios)],
+    ['Tipos de vegetação', list(profile?.vegetacao)],
+    ['Ocorrência nativa por UF', list(profile?.uf?.map((code) => brazilMap?.names?.[code] || code))],
+    ['Endemismo', list(profile?.endemismo?.map((value) => endemism[value] || value))],
+    ['Identificador no JBRJ', profile?.id && anchor(['FB' + profile.id, taxonLink(profile)])],
+    ['Registro no anexo', esc(number.format(id))]
+  ];
+  return '<dl class="botany-facts">' + rows.filter(([,value]) => value).map(([label,value]) =>
+    '<dt>' + esc(label) + '</dt><dd>' + value + '</dd>').join('') + '</dl>' +
+    (profile ? '' : '<p class="muted">Ficha disponível com os dados da Portaria. O perfil botânico complementar está indisponível.</p>');
+}
+
 function botanicalProfile(profile) {
   if (!profile) return botanyReady ? '<p class="muted">Vínculo com a base botânica em revisão.</p>' : '';
   const forms = [...new Set((profile.habito ?? []).map((form) => lifeForms[form]).filter(Boolean))];
@@ -230,15 +262,14 @@ function botanicalProfile(profile) {
     profile.endemismo?.length === 1 && profile.endemismo[0] === 'Endemica' ? 'Na natureza, só ocorro no Brasil.' :
       profile.endemismo?.length === 1 && profile.endemismo[0] === 'Não endemica' ? 'Também ocorro fora do Brasil.' : '',
   ].filter(Boolean);
-  const link = 'https://reflora.jbrj.gov.br/reflora/listaBrasil/FichaPublicaTaxonUC/FichaPublicaTaxonUC.do?id=FB' + encodeURIComponent(profile.id);
   return (sentences.length ? '<p class="botany-story">' + esc(sentences.join(' ')) + '</p>' : '') +
     (popular ? '<p class="botany-story botany-aliases">Também me chamam de ' + esc(popular) + '.</p>' : '') +
     (!sentences.length && !popular ? '<p class="muted">Perfil disponível na fonte botânica.</p>' : '') +
-    '<p class="botany-source">' + anchor(['Flora e Funga do Brasil · JBRJ', link]) + ' · ' +
+    '<p class="botany-source">' + anchor(['Flora e Funga do Brasil · JBRJ', taxonLink(profile)]) + ' · ' +
     anchor(['CC BY 4.0', 'https://creativecommons.org/licenses/by/4.0/']) + '</p>';
 }
 
-async function checkLiveBotany(profile, button, output) {
+async function checkLiveBotany(item, profile, button, output) {
   const endpoints = 'https://servicos.jbrj.gov.br/v2/flora/taxon/';
   button.disabled = true;
   output.textContent = 'Consultando o Jardim Botânico…';
@@ -255,10 +286,12 @@ async function checkLiveBotany(profile, button, output) {
       .sort((a, b) => a.localeCompare(b, 'pt-BR'));
     const sources = (record.distribuition ?? []).filter((row) =>
       row.countrycode === 'BR' && row.establishmentmeans === 'Nativa');
+    const authorship = record.taxon.scientificnameauthorship || profile.autoria || '';
+    const fullName = record.taxon.scientificname || profile.nome;
     const updated = {
       ...profile,
-      nome: record.taxon.scientificname,
-      autoria: '',
+      nome: authorship && fullName.endsWith(' ' + authorship) ? fullName.slice(0, -(authorship.length + 1)) : fullName,
+      autoria: authorship,
       popular: strings((record.vernacular_name ?? []).filter((row) => row.language_vernacularname === 'PORTUGUES')
         .map((row) => row.vernacularname)),
       sinonimos: strings((record.resource_relationship ?? []).filter((row) =>
@@ -270,7 +303,10 @@ async function checkLiveBotany(profile, button, output) {
       substrato: record.specie_profile?.habitat,
       vegetacao: record.specie_profile?.vegetationType
     };
-    if (button.isConnected) $('botany-profile').innerHTML = botanicalProfile(updated);
+    if (button.isConnected) {
+      $('botany-profile').innerHTML = botanicalProfile(updated);
+      $('scientific-facts').innerHTML = scientificFacts(item, updated);
+    }
     output.textContent = 'Perfil consultado agora no JBRJ. O risco oficial continua indicado pela Portaria de 2026.';
   } catch {
     output.textContent = 'A consulta ao JBRJ falhou. Você ainda pode ler os dados da edição local.';
@@ -455,6 +491,25 @@ function renderReader(item) {
   const label = common || name;
   const back = readerScope?.kind === 'marcadas' ? 'marcadas' : 'indice';
   const map = occurrenceMap(profile);
+  const sources = [
+    ['Portaria GM/MMA nº 1.783/2026 e anexo oficial', official],
+    ...(profile ? [['Ficha do táxon no Flora e Funga do Brasil · JBRJ', taxonLink(profile)],
+      ['Base Flora e Funga do Brasil', jbrj]] : [['Consultar Flora e Funga do Brasil · JBRJ', 'https://floradobrasil.jbrj.gov.br/']]),
+    ...(feature?.links ?? []),
+    ...(feature?.links?.some(([source]) => source.includes('CNCFlora')) ? [] : [['Avaliações e dados de conservação · CNCFlora', 'https://cncflora.jbrj.gov.br/']]),
+    ...(map ? [['Malha territorial · IBGE', 'https://geoftp.ibge.gov.br/organizacao_do_territorio/malhas_territoriais/malhas_municipais/municipio_2025/Brasil/']] : [])
+  ];
+  const plateSources = useImported ? [[imported.credit,imported.page],[imported.license,imported.license_url]] :
+    feature?.image ? [feature.credit, ...(feature.license ? [feature.license] : [])] :
+    feature?.photoReference ? [feature.photoReference] : [];
+  const notes = '<details class="field-notes"><summary>Informações científicas</summary><div class="notes-body">' +
+    '<h3>Ficha científica</h3><div id="scientific-facts">' + scientificFacts(item, profile) + '</div>' + notice +
+    description + '<h3>Fontes e links</h3><ul class="science-sources">' +
+    sources.map((source) => '<li>' + anchor(source) + '</li>').join('') + '</ul>' +
+    (plateSources.length ? '<h3>Créditos da prancha</h3><p class="source-links">' + plateSources.map(anchor).join('') + '</p>' : '') +
+    (profile ? '<button class="button outline" id="live-botany" type="button">Consultar dados atuais no JBRJ</button>' +
+    '<p class="muted" id="live-botany-status" role="status"></p>' : '') + '</div></details>';
+
   $('especie').innerHTML =
     '<div class="reader-top"><a href="#' + back + '">← ' + (back === 'marcadas' ? 'Marcadas' : 'Índice') +
     '</a><div class="reader-actions"><button id="mark" class="button outline" aria-pressed="' + marks.has(id) + '">' +
@@ -467,12 +522,7 @@ function renderReader(item) {
     '<section class="letter-page" aria-labelledby="letter-title"><span class="letter-ornament" aria-hidden="true">◆</span>' +
     '<h2 id="letter-title">Carta para ' + esc(label) + '</h2><div id="letter-content" aria-live="polite">' +
     '<p class="letter-note">Carregando a carta…</p></div></section>' +
-    '<details class="field-notes"><summary>Fontes e notas da prancha</summary><div class="notes-body">' +
-    description + notice + '<p class="source-links">' + anchor(['Anexo oficial',official]) +
-    (map ? anchor(['Malha territorial · IBGE', 'https://geoftp.ibge.gov.br/organizacao_do_territorio/malhas_territoriais/malhas_municipais/municipio_2025/Brasil/']) : '') +
-    (feature?.links ?? []).map(anchor).join('') + '</p>' +
-    (profile ? '<button class="button outline" id="live-botany" type="button">Consultar dados atuais no JBRJ</button>' +
-    '<p class="muted" id="live-botany-status" role="status"></p>' : '') + '</div></details></div>' +
+    notes + '</div>' +
     '<div class="species-visual">' + figure + map + '</div></div>' +
     '<nav class="reader-nav" aria-label="Folhear espécies"><button class="button outline" id="prev" ' +
     (prev ? '' : 'disabled') + '>← Anterior</button><span>' + number.format(index + 1) + ' de ' + number.format(order.length) +
@@ -486,7 +536,7 @@ function renderReader(item) {
   },{once:true});
   loadLetter($('letter-content'),id,label);
   const liveButton = $('live-botany');
-  if (liveButton) liveButton.onclick = () => checkLiveBotany(botany[id], liveButton, $('live-botany-status'));
+  if (liveButton) liveButton.onclick = () => checkLiveBotany(item, profile, liveButton, $('live-botany-status'));
   if (requestedDirection) {
     $('especie').style.setProperty('--turn', requestedDirection > 0 ? '16px' : '-16px');
     $('especie').classList.remove('turn');
