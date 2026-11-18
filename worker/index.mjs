@@ -200,30 +200,17 @@ async function writingDesk(request, env) {
   return json({error:'O caderno mudou. Guarde uma cópia do seu texto antes de atualizar.'}, 409);
 }
 
-async function passwordHash(password, salt) {
-  const key = await crypto.subtle.importKey('raw', encoder.encode(password), 'PBKDF2', false, ['deriveBits']);
-  const bits = await crypto.subtle.deriveBits({
-    name:'PBKDF2', hash:'SHA-256', salt:encoder.encode(salt), iterations:100_000
-  }, key, 256);
-  return hex(bits);
-}
+const ownerEmail = (env) => emailAddress(env.FLORA_ADMIN_EMAIL);
+const sessionDigest = (token) => digest('flora-admin-session:' + token);
+const loginDigest = (token) => digest('flora-admin-link:' + token);
+const loginSeconds = 15 * 60;
 
-function sameHash(left, right) {
-  if (left.length !== right.length) return false;
-  let diff = 0;
-  for (let i = 0; i < left.length; i++) diff |= left.charCodeAt(i) ^ right.charCodeAt(i);
-  return diff === 0;
+async function isAdmin(env, email) {
+  if (!email) return false;
+  if (email === ownerEmail(env)) return true;
+  const row = await env.DB.prepare('SELECT email FROM moderation_admins WHERE email = ?').bind(email).first();
+  return Boolean(row);
 }
-
-async function passwordMatches(password, stored) {
-  if (!stored || !password || password.length > 128) return false;
-  const [salt, expected] = stored.split('.');
-  return Boolean(salt && expected && sameHash(await passwordHash(password, salt), expected));
-}
-
-const ownerSignedIn = (request, email) => Boolean(email &&
-  request.headers.get('oai-authenticated-user-id') &&
-  emailAddress(request.headers.get('oai-authenticated-user-email')) === email);
 
 function sessionToken(request) {
   return request.headers.get('Cookie')?.match(/(?:^|;\s*)__Host-flora-moderacao=([0-9a-f]{64})(?:;|$)/)?.[1];
@@ -235,9 +222,11 @@ function sessionCookie(token, maxAge) {
 
 async function loggedIn(request, env) {
   const token = sessionToken(request);
-  return token && env.FLORA_ADMIN_EMAIL && await env.DB.prepare(
-    'SELECT email FROM moderation_sessions WHERE token_hash = ? AND expires_at > ? AND email = ?'
-  ).bind(await digest(token), now(), env.FLORA_ADMIN_EMAIL).first();
+  if (!token) return null;
+  const row = await env.DB.prepare(
+    'SELECT email FROM moderation_sessions WHERE token_hash = ? AND expires_at > ?'
+  ).bind(await sessionDigest(token), now()).first();
+  return row && await isAdmin(env, row.email) ? row : null;
 }
 
 async function startSession(db, email) {
@@ -245,68 +234,100 @@ async function startSession(db, email) {
   await db.batch([
     db.prepare('DELETE FROM moderation_sessions WHERE expires_at <= ?').bind(now()),
     db.prepare('INSERT INTO moderation_sessions (token_hash,email,expires_at) VALUES (?,?,?)')
-      .bind(await digest(token), email, now() + sessionSeconds)
+      .bind(await sessionDigest(token), email, now() + sessionSeconds)
   ]);
   return json({ok:true}, 200, {'Set-Cookie':sessionCookie(token, sessionSeconds)});
 }
 
+async function requestLoginLink(request, env) {
+  if (!mailEnabled(env)) return json({error:'O envio de links está temporariamente indisponível.'}, 503);
+  const data = await readJson(request, 2048);
+  const email = emailAddress(data?.email);
+  if (!validEmail(email)) return json({error:'Informe um e-mail válido.'}, 400);
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  if (!await limit(env, 'admin-request-ip', ip, 15, 900)) {
+    return json({error:'Aguarde alguns minutos antes de solicitar outro link.'}, 429);
+  }
+  const accepted = {ok:true};
+  if (!await limit(env, 'admin-request-email', email, 3, 900) || !await isAdmin(env, email)) {
+    return json(accepted);
+  }
+
+  const token = random(32);
+  const tokenHash = await loginDigest(token);
+  const timestamp = now();
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM moderation_login_links WHERE expires_at <= ?').bind(timestamp),
+    env.DB.prepare('DELETE FROM mail_limits WHERE window_end < ?').bind(timestamp),
+    env.DB.prepare('INSERT INTO moderation_login_links (token_hash,email,expires_at) VALUES (?,?,?)')
+      .bind(tokenHash, email, timestamp + loginSeconds)
+  ]);
+  const link = new URL('/admin', request.url);
+  link.hash = 'entrar=' + token;
+  try {
+    const result = await fetch('https://api.resend.com/emails', {
+      method:'POST', signal:AbortSignal.timeout(8000),
+      headers:{'Authorization':'Bearer ' + env.RESEND_API_KEY, 'Content-Type':'application/json',
+        'Idempotency-Key':'flora/admin/' + tokenHash},
+      body:JSON.stringify({from:env.RESEND_FROM,to:[email],subject:'Seu link de acesso à moderação · Cartas à Flora',
+        text:'Abra o painel de moderação: ' + link.href + '\n\n' +
+          'O link expira em 15 minutos e só funciona uma vez. Se você não pediu o link, ignore este e-mail.'})
+    });
+    if (!result.ok) console.warn('Resend recusou o link de moderação. HTTP ' + result.status);
+  } catch {
+    console.warn('Resend não confirmou o envio do link de moderação.');
+  }
+  return json(accepted);
+}
+
+async function redeemLoginLink(request, env) {
+  const data = await readJson(request, 2048);
+  if (typeof data?.token !== 'string' || !/^[a-f0-9]{64}$/.test(data.token)) {
+    return json({error:'Link inválido. Solicite um novo acesso.'}, 400);
+  }
+  const row = await env.DB.prepare(
+    'DELETE FROM moderation_login_links WHERE token_hash = ? AND expires_at > ? RETURNING email'
+  ).bind(await loginDigest(data.token), now()).first();
+  if (!row || !await isAdmin(env, row.email)) {
+    return json({error:'Este link expirou ou já foi usado. Solicite um novo acesso.'}, 410);
+  }
+  return startSession(env.DB, row.email);
+}
+
 async function access(request, env, action) {
-  const email = env.FLORA_ADMIN_EMAIL;
-  if (!email) return json({error:'Moderação indisponível.'}, 503);
-  const standalone = Boolean(env.FLORA_STANDALONE);
-  const savedPassword = () => env.DB.prepare('SELECT password_hash FROM moderation_credentials WHERE email = ?')
-    .bind(email).first();
+  if (!ownerEmail(env)) return json({error:'Moderação indisponível.'}, 503);
   if (action === 'session' && request.method === 'GET') {
-    const active = Boolean(await loggedIn(request, env));
-    const activation = standalone && Boolean(env.FLORA_ADMIN_SETUP_HASH) && !await savedPassword();
-    return json({loggedIn:active, standalone, activation,
-      canSetPassword:standalone ? active || activation : ownerSignedIn(request, email)});
+    const session = await loggedIn(request, env);
+    return json({loggedIn:Boolean(session), canManageAdmins:session?.email === ownerEmail(env)});
   }
   if (request.method !== 'POST') return json({error:'Método inválido.'}, 405);
+  if (action === 'solicitar-link') return requestLoginLink(request, env);
+  if (action === 'confirmar-link') return redeemLoginLink(request, env);
   if (action === 'sair') {
     const token = sessionToken(request);
     if (token) await env.DB.prepare('DELETE FROM moderation_sessions WHERE token_hash = ?')
-      .bind(await digest(token)).run();
+      .bind(await sessionDigest(token)).run();
     return json({ok:true}, 200, {'Set-Cookie':sessionCookie('', 0)});
   }
-  const data = await readJson(request, 4096);
-  const password = typeof data?.password === 'string' ? data.password : '';
-  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-  if (!['senha', 'entrar'].includes(action)) return json({error:'Método inválido.'}, 405);
-  if (!await limit(env, 'admin-ip', ip, 12, 900)) return json({error:'Muitas tentativas. Aguarde alguns minutos.'}, 429);
-  const saved = await savedPassword();
-  if (action === 'senha') {
-    if (password.length < 12 || password.length > 128) return json({error:'Use de 12 a 128 caracteres.'}, 400);
-    if (standalone) {
-      const proof = typeof data?.proof === 'string' ? data.proof : '';
-      const authorized = saved ?
-        await loggedIn(request, env) && await passwordMatches(proof, saved.password_hash) :
-        proof.length <= 128 && Boolean(env.FLORA_ADMIN_SETUP_HASH) &&
-          sameHash(await digest(proof.trim()), env.FLORA_ADMIN_SETUP_HASH);
-      if (!authorized) return json({error:'Código de ativação ou senha atual inválida.'}, 403);
-    } else if (!ownerSignedIn(request, email)) {
-      return json({error:'Confirme sua identidade com a conta do ChatGPT.'}, 403);
-    }
-    const salt = random(16);
-    const hash = salt + '.' + await passwordHash(password, salt);
-    const update = standalone
-      ? saved
-        ? env.DB.prepare('UPDATE moderation_credentials SET password_hash = ? WHERE email = ? AND password_hash = ?')
-          .bind(hash, email, saved.password_hash)
-        : env.DB.prepare('INSERT INTO moderation_credentials (email,password_hash) VALUES (?,?) ON CONFLICT DO NOTHING')
-          .bind(email, hash)
-      : env.DB.prepare('INSERT INTO moderation_credentials (email,password_hash) VALUES (?,?) ' +
-          'ON CONFLICT(email) DO UPDATE SET password_hash = excluded.password_hash').bind(email, hash);
-    const result = await update.run();
-    if (!result.meta.changes) return json({error:'A senha já foi alterada. Entre novamente.'}, 409);
-    await env.DB.prepare('DELETE FROM moderation_sessions WHERE email = ?').bind(email).run();
-    return startSession(env.DB, email);
+  return json({error:'Método inválido.'}, 405);
+}
+
+async function manageAdmins(request, env) {
+  const session = await loggedIn(request, env);
+  if (!session || session.email !== ownerEmail(env)) return json({error:'Acesso restrito ao titular.'}, 403);
+  if (request.method === 'GET') {
+    const {results} = await env.DB.prepare('SELECT email FROM moderation_admins ORDER BY added_at, email').all();
+    return json({admins:[{email:session.email, owner:true}, ...results.map(({email}) => ({email, owner:false}))]});
   }
-  if (emailAddress(data?.email) !== email ||
-      !await passwordMatches(password, saved?.password_hash || env.FLORA_ADMIN_BOOTSTRAP_HASH)) {
-    return json({error:'E-mail ou senha inválidos.'}, 401);
-  }
-  return startSession(env.DB, email);
+  if (request.method !== 'POST') return json({error:'Método inválido.'}, 405);
+  const data = await readJson(request, 2048);
+  const email = emailAddress(data?.email);
+  if (!validEmail(email)) return json({error:'Informe um e-mail válido.'}, 400);
+  if (email === session.email) return json({error:'Esse endereço já é o titular do painel.'}, 409);
+  const row = await env.DB.prepare(
+    'INSERT INTO moderation_admins (email,added_at) VALUES (?,?) ON CONFLICT DO NOTHING RETURNING email'
+  ).bind(email, now()).first();
+  return row ? json({ok:true}, 201) : json({error:'Esse endereço já tem acesso ao painel.'}, 409);
 }
 
 async function moderate(request, env, url, id) {
@@ -386,8 +407,9 @@ export default {
           }
           return json({error:'Método inválido.'}, 405);
         }
-        const auth = path.match(/^\/api\/moderacao\/(session|entrar|senha|sair)$/);
+        const auth = path.match(/^\/api\/moderacao\/(session|solicitar-link|confirmar-link|sair)$/);
         if (auth) return await access(request, env, auth[1]);
+        if (path === '/api/moderacao/admins') return await manageAdmins(request, env);
         const admin = path.match(/^\/api\/moderacao\/cartas(?:\/([0-9a-f-]{36}))?$/);
         if (admin) return await moderate(request, env, url, admin[1]);
         return json({error:'Página não encontrada.'}, 404);
@@ -404,7 +426,9 @@ export default {
           'Cache-Control':'no-store', 'Referrer-Policy':'no-referrer', 'X-Frame-Options':'DENY',
           'Content-Security-Policy':"default-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
         } : {}),
-        ...(asset === assets['/admin.html'] ? {'X-Frame-Options':'DENY'} : {})
+        ...(asset === assets['/admin.html'] ? {'Cache-Control':'no-store', 'Referrer-Policy':'no-referrer',
+          'X-Frame-Options':'DENY',
+          'Content-Security-Policy':"default-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"} : {})
       }});
     } catch {
       return json({error:'O serviço está temporariamente indisponível.'}, 503);

@@ -6,7 +6,7 @@ O guia continua público. O leitor anônimo consulta apenas o estado da ficha e 
 
 O visitante escreve a carta na ficha da planta. As submissões ficam pendentes no D1 até a moderação. Cada planta pode ter uma carta publicada. Só o nome e o texto aprovados aparecem na ficha.
 
-Em `/admin`, entre com e-mail e senha. No Railway, use o código de ativação para definir a primeira senha. No Sites, a primeira senha é definida após confirmar a identidade pelo ChatGPT. A moderação pode editar, aprovar ou excluir cartas.
+Em `/admin`, solicite um link com o seu e-mail autorizado. O link expira em 15 minutos e é de uso único. O titular configurado em `FLORA_ADMIN_EMAIL` pode adicionar administradores, que também podem editar, aprovar e excluir cartas.
 
 ## Railway e execução local
 
@@ -16,7 +16,6 @@ O serviço roda com Node.js 24. O Dockerfile compila o Worker compartilhado e o 
 | --- | --- |
 | `FLORA_PUBLIC_ORIGIN` | URL HTTPS pública do serviço, sem caminho |
 | `FLORA_ADMIN_EMAIL` | Conta autorizada a moderar cartas |
-| `FLORA_ADMIN_SETUP_HASH` | SHA-256 de um código aleatório de uso único para definir a primeira senha |
 | `FLORA_RATE_KEY` | Segredo aleatório para os limites de envio |
 | `FLORA_MIGRATION_JSON` | Importação inicial do Sites com as listas `letter_submissions` e `moderation_credentials`. O SQLite registra a importação em uma transação e ignora repetições. |
 | `RESEND_API_KEY` | Chave do Resend com permissão de envio |

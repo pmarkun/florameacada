@@ -4,11 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
 <title>Moderação de cartas · Cartas à Flora</title>
 <link rel="icon" href="/icone-192.png">
 <link rel="stylesheet" href="/guia.css?v=cartas-a-flora-3">
-<link rel="stylesheet" href="/admin.css">
-<script src="/admin.js?v=railway-1" defer></script>
+<link rel="stylesheet" href="/admin.css?v=magic-1">
+<script src="/admin.js?v=magic-1" defer></script>
 </head>
 <body>
 <a class="skip" href="#conteudo">Ir ao conteúdo</a>
@@ -21,24 +22,25 @@
     <h1 id="titulo">Moderação de cartas</h1>
     <p id="notice" role="status">Carregando…</p>
     <div id="login" hidden>
+      <p>Use seu endereço autorizado para receber um link de acesso de uso único.</p>
       <form id="login-form" class="claim-form">
-        <label for="email">E-mail</label><input id="email" name="email" type="email" autocomplete="username" maxlength="254" required>
-        <label for="password">Senha</label><input id="password" name="password" type="password" autocomplete="current-password" maxlength="128" required>
-        <button class="button ink-button" type="submit">Entrar</button>
+        <label for="email">Seu e-mail</label>
+        <input id="email" name="email" type="email" autocomplete="email" maxlength="254" required>
+        <button class="button ink-button" type="submit">Enviar link de acesso</button>
       </form>
-      <p class="password-help" id="sites-signin"><a href="/signin-with-chatgpt?returnTo=%2Fadmin" target="_top">Confirmar minha conta para definir a senha</a></p>
     </div>
-    <details id="password-setup" hidden>
-      <summary id="password-title">Definir senha de moderação</summary>
-      <form id="password-form" class="claim-form">
-        <div id="password-proof" hidden>
-          <label for="proof" id="proof-label">Código de ativação</label>
-          <input id="proof" name="proof" type="password" maxlength="128" autocomplete="off">
-        </div>
-        <label for="new-password">Nova senha</label>
-        <input id="new-password" name="password" type="password" autocomplete="new-password" minlength="12" maxlength="128" required>
-        <p class="form-note">Use pelo menos 12 caracteres.</p>
-        <button class="button ink-button" type="submit">Salvar senha</button>
+    <div id="redeem" hidden>
+      <button class="button ink-button" type="button" id="redeem-button">Entrar no painel</button>
+    </div>
+    <details id="admin-access" hidden>
+      <summary>Administradores</summary>
+      <ul id="admin-list"></ul>
+      <form id="admin-form" class="claim-form">
+        <label for="admin-email">E-mail do novo administrador</label>
+        <input id="admin-email" name="email" type="email" autocomplete="off" maxlength="254" required>
+        <p class="form-note">A pessoa poderá solicitar um link nessa página e moderar cartas.</p>
+        <button class="button ink-button" type="submit">Adicionar administrador</button>
+        <p id="admin-status" role="status"></p>
       </form>
     </details>
     <section id="queue" aria-label="Fila de cartas" hidden>

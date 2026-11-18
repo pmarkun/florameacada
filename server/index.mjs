@@ -19,9 +19,7 @@ const data = volume || process.env.FLORA_DATA_DIR || '.data';
 mkdirSync(data, {recursive:true, mode:0o700});
 const env = {
   DB:openDatabase(join(data, 'flora.sqlite'), process.env.FLORA_MIGRATION_JSON),
-  FLORA_STANDALONE:true,
   FLORA_ADMIN_EMAIL:process.env.FLORA_ADMIN_EMAIL,
-  FLORA_ADMIN_SETUP_HASH:process.env.FLORA_ADMIN_SETUP_HASH,
   RESEND_API_KEY:process.env.RESEND_API_KEY,
   RESEND_FROM:process.env.RESEND_FROM,
   FLORA_RATE_KEY:process.env.FLORA_RATE_KEY

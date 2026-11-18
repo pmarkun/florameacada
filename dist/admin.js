@@ -4,7 +4,8 @@ const date = new Intl.DateTimeFormat('pt-BR', {dateStyle:'medium', timeStyle:'sh
 let published = false;
 let page = 0;
 let queueLoad = 0;
-let standalone = false;
+let linkToken = new URLSearchParams(location.hash.slice(1)).get('entrar');
+if (!/^[a-f0-9]{64}$/.test(linkToken ?? '')) linkToken = null;
 
 async function api(path, body) {
   const options = body === undefined ? {} : {
@@ -18,23 +19,6 @@ async function api(path, body) {
     throw error;
   }
   return data;
-}
-
-function bindForm(form, path) {
-  form.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const button = event.submitter || form.querySelector('button');
-    button.disabled = true;
-    try {
-      await api(path, Object.fromEntries(new FormData(form)));
-      form.reset();
-      await refresh();
-    } catch (error) {
-      notice.textContent = error.message || 'O serviço está indisponível.';
-    } finally {
-      button.disabled = false;
-    }
-  });
 }
 
 function renderLetter(letter) {
@@ -113,36 +97,96 @@ async function loadQueue() {
   }
 }
 
+async function loadAdmins() {
+  const {admins} = await api('admins');
+  $('admin-list').replaceChildren(...admins.map(({email,owner}) => {
+    const item = document.createElement('li');
+    item.textContent = email + (owner ? ' · Titular' : '');
+    return item;
+  }));
+}
+
 async function refresh() {
   notice.textContent = '';
   const state = await api('session');
-  standalone = state.standalone;
-  $('login').hidden = state.loggedIn || state.canSetPassword;
-  $('sites-signin').hidden = standalone;
-  $('password-title').textContent = state.loggedIn ? 'Alterar senha de moderação' : 'Definir senha de moderação';
-  $('password-proof').hidden = !standalone;
-  $('proof').required = standalone;
-  $('proof-label').textContent = state.activation ? 'Código de ativação' : 'Senha atual';
-  $('proof').autocomplete = state.activation ? 'off' : 'current-password';
-  $('password-setup').hidden = !state.canSetPassword;
-  $('password-setup').open = !state.loggedIn && state.canSetPassword;
+  $('login').hidden = state.loggedIn || Boolean(linkToken);
+  $('redeem').hidden = state.loggedIn || !linkToken;
+  $('admin-access').hidden = !state.canManageAdmins;
   $('queue').hidden = $('logout').hidden = !state.loggedIn;
   if (state.loggedIn) {
     await loadQueue();
   } else {
     queueLoad += 1;
     $('letters').replaceChildren();
+    $('admin-list').replaceChildren();
+  }
+  if (state.canManageAdmins) {
+    await loadAdmins().catch(() => { $('admin-status').textContent = 'Não foi possível carregar os administradores.'; });
   }
 }
 
+function clearLink() {
+  linkToken = null;
+  history.replaceState(null, '', location.pathname + location.search);
+}
+
 notice.tabIndex = -1;
-bindForm($('login-form'), 'entrar');
-bindForm($('password-form'), 'senha');
+$('login-form').onsubmit = async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = form.querySelector('button');
+  button.disabled = true;
+  try {
+    await api('solicitar-link', Object.fromEntries(new FormData(form)));
+    notice.textContent = 'Se o endereço estiver autorizado, você receberá um link válido por 15 minutos.';
+  } catch (error) {
+    notice.textContent = error.message || 'Não foi possível solicitar o link.';
+  } finally {
+    notice.focus();
+    button.disabled = false;
+  }
+};
+$('redeem-button').onclick = async (event) => {
+  const button = event.currentTarget;
+  button.disabled = true;
+  try {
+    await api('confirmar-link', {token:linkToken});
+    clearLink();
+    await refresh();
+  } catch (error) {
+    if (error.status === 400 || error.status === 410) {
+      clearLink();
+      $('login').hidden = false;
+      $('redeem').hidden = true;
+    }
+    notice.textContent = error.message || 'Não foi possível entrar.';
+    notice.focus();
+  } finally {
+    button.disabled = false;
+  }
+};
+$('admin-form').onsubmit = async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = form.querySelector('button');
+  const status = $('admin-status');
+  button.disabled = true;
+  try {
+    await api('admins', Object.fromEntries(new FormData(form)));
+    form.reset();
+    status.textContent = 'Administrador adicionado.';
+    await loadAdmins();
+  } catch (error) {
+    status.textContent = error.message || 'Não foi possível atualizar os administradores.';
+  } finally {
+    button.disabled = false;
+  }
+};
 $('logout').onclick = async () => {
   try {
     await api('sair', {});
-    if (standalone) await refresh();
-    else location.href = '/signout-with-chatgpt?returnTo=%2Fadmin';
+    if (linkToken) clearLink();
+    await refresh();
   } catch (error) {
     notice.textContent = error.message || 'Não foi possível sair.';
   }
