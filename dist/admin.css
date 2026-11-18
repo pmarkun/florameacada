@@ -1,0 +1,14 @@
+#notice:empty {display:none}
+#password-setup {margin:20px 0}
+#password-setup summary {cursor:pointer;font-weight:700}
+.password-help {margin:14px 0 0}
+.admin-actions {display:flex;flex-wrap:wrap;gap:8px}
+.admin-actions button[aria-pressed=true] {background:#e8dcc2}
+.admin-letter {border-top:1px solid var(--line);margin-top:20px;padding-top:10px}
+.admin-letter .claim-form {max-width:none}
+.admin-letter label {display:grid;gap:5px}
+.admin-letter .letter-meta {overflow-wrap:anywhere;margin-bottom:0}
+.admin-letter .delete-letter {color:#81363b}
+#pagination {margin-top:18px}
+#letters > p {margin:16px 0}
+#password-proof {display:grid;gap:8px}

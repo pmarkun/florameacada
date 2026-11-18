@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Moderação de cartas · Flora ameaçada</title>
+<link rel="icon" href="/icone-192.png">
+<link rel="stylesheet" href="/style.css?v=moderacao-1">
+<link rel="stylesheet" href="/admin.css">
+<script src="/admin.js?v=railway-1" defer></script>
+</head>
+<body>
+<a class="skip" href="#conteudo">Ir ao conteúdo</a>
+<header class="mast">
+  <a class="brand" href="/"><img src="/icone-192.png" alt="" width="44" height="44">Flora ameaçada</a>
+  <nav><button id="logout" class="button outline" type="button" hidden>Sair</button></nav>
+</header>
+<main id="conteudo">
+  <section class="paper prose" aria-labelledby="titulo">
+    <h1 id="titulo">Moderação de cartas</h1>
+    <p id="notice" role="status">Carregando…</p>
+    <div id="login" hidden>
+      <form id="login-form" class="claim-form">
+        <label for="email">E-mail</label><input id="email" name="email" type="email" autocomplete="username" maxlength="254" required>
+        <label for="password">Senha</label><input id="password" name="password" type="password" autocomplete="current-password" maxlength="128" required>
+        <button class="button ink-button" type="submit">Entrar</button>
+      </form>
+      <p class="password-help" id="sites-signin"><a href="/signin-with-chatgpt?returnTo=%2Fadmin" target="_top">Confirmar minha conta para definir a senha</a></p>
+    </div>
+    <details id="password-setup" hidden>
+      <summary id="password-title">Definir senha de moderação</summary>
+      <form id="password-form" class="claim-form">
+        <div id="password-proof" hidden>
+          <label for="proof" id="proof-label">Código de ativação</label>
+          <input id="proof" name="proof" type="password" maxlength="128" autocomplete="off">
+        </div>
+        <label for="new-password">Nova senha</label>
+        <input id="new-password" name="password" type="password" autocomplete="new-password" minlength="12" maxlength="128" required>
+        <p class="form-note">Use pelo menos 12 caracteres.</p>
+        <button class="button ink-button" type="submit">Salvar senha</button>
+      </form>
+    </details>
+    <section id="queue" aria-label="Fila de cartas" hidden>
+      <div class="admin-actions" role="group" aria-label="Filtrar cartas">
+        <button class="button outline" id="pending" type="button" aria-pressed="true">Pendentes</button>
+        <button class="button outline" id="published" type="button" aria-pressed="false">Publicadas</button>
+      </div>
+      <div id="letters"></div>
+      <div class="admin-actions" id="pagination" hidden>
+        <button class="button outline" id="previous" type="button">Página anterior</button>
+        <button class="button outline" id="next" type="button">Próxima página</button>
+      </div>
+    </section>
+    <template id="letter-card">
+      <article class="admin-letter">
+        <h2><a class="plant"></a></h2>
+        <p class="letter-meta muted"><span class="submitted-email"></span> · <time></time></p>
+        <form class="claim-form">
+          <label>Nome do autor<input name="name" maxlength="100" required></label>
+          <label>Carta<textarea name="letter" rows="9" maxlength="8000" required></textarea></label>
+          <div class="admin-actions">
+            <button class="button outline" type="submit" value="edit">Salvar edição</button>
+            <button class="button ink-button" type="submit" value="publish">Aprovar e publicar</button>
+            <button class="button outline delete-letter" type="button">Excluir</button>
+          </div>
+          <p role="status" class="claim-status"></p>
+        </form>
+      </article>
+    </template>
+  </section>
+</main>
+</body>
+</html>

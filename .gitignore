@@ -1,0 +1,6 @@
+/dist/server/
+/.cache-pranchas.json
+__pycache__/
+/.data/
+.env
+.env.*
