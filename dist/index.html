@@ -10,8 +10,8 @@
 <link rel="icon" href="/icone-192.png">
 <link rel="apple-touch-icon" href="/icone-192.png">
 <link rel="manifest" href="/manifest.webmanifest">
-<link rel="stylesheet" href="/guia.css?v=cartas-a-flora-2">
-<script src="/guia.js?v=cartas-a-flora-2" defer></script>
+<link rel="stylesheet" href="/guia.css?v=cartas-a-flora-3">
+<script src="/guia.js?v=cartas-a-flora-3" defer></script>
 <title>Cartas à Flora · Plantas ameaçadas do Brasil</title>
 </head>
 <body>
@@ -26,7 +26,7 @@
       <div class="cover">
         <div class="cover-inner">
           <h1 id="titulo">Cartas <em>à Flora</em></h1>
-          <p class="intro">Um livro de cartas às plantas ameaçadas do Brasil.</p>
+          <p class="intro">Um livro de cartas às plantas ameaçadas do Brasil. Escolha uma planta e escreva para ela.</p>
           <div class="home-totals" role="status" aria-label="Cartas e plantas">
             <div><strong id="published-total">—</strong><span id="published-label">cartas publicadas</span></div>
             <div><strong id="waiting-total">—</strong><span id="waiting-label">plantas sem carta</span></div>
@@ -34,9 +34,9 @@
           <div class="cover-actions">
             <a class="button gold" id="read-a-letter" hidden>Ler uma carta <span aria-hidden="true">→</span></a>
             <a class="button cover-search" id="find-a-plant" href="#indice">Encontrar uma planta</a>
+            <a class="button cover-search" href="#sobre">Sobre</a>
           </div>
           <p id="home-status" class="home-status" role="status"></p>
-          <a class="resume" id="resume" href="#capa" hidden>Continuar de onde parei →</a>
         </div>
       </div>
       <figure class="frontispiece letter-frontispiece">
@@ -53,13 +53,13 @@
     <p class="overline">GUIA DE CAMPO · 2026</p><h1 id="index-title">Índice de espécies</h1>
     <form id="search-form" role="search"><label for="q">Buscar no guia</label><input id="q" name="q" type="search" placeholder="Ex. pau-brasil, Xyris ou Fabaceae" autocomplete="off">
     <div class="filters"><label>Categoria de risco<select id="risk"><option value="">Todas as categorias</option><option value="VU">VU · Vulnerável</option><option value="EN">EN · Em Perigo</option><option value="CR">CR · Criticamente em Perigo (inclui PE)</option><option value="CR (PE)">CR (PE) · Possivelmente Extinta</option></select></label>
-    <label>Família<select id="family"><option value="">Todas as famílias</option></select></label></div><details class="distribution-filters" id="distribution-filters"><summary>Filtrar por distribuição</summary><div class="filters"><label>Domínio fitogeográfico<select id="domain"><option value="">Todos os domínios</option></select></label><label>Estado ou DF<select id="state"><option value="">Todas as UFs</option></select></label></div><p class="muted" id="distribution-note">Os filtros usam registros de ocorrência nativa do Flora e Funga do Brasil.</p></details><button type="button" class="quiet" id="clear">Limpar busca e filtros</button></form>
+    <label>Família<select id="family"><option value="">Todas as famílias</option></select></label><label>Cartas<select id="letter-filter" disabled><option value="">Todas as plantas</option><option value="published">Com carta publicada</option><option value="waiting">Sem carta publicada</option></select></label></div><details class="distribution-filters" id="distribution-filters"><summary>Filtrar por distribuição</summary><div class="filters"><label>Domínio fitogeográfico<select id="domain"><option value="">Todos os domínios</option></select></label><label>Estado ou DF<select id="state"><option value="">Todas as UFs</option></select></label></div><p class="muted" id="distribution-note">Os filtros usam registros de ocorrência nativa do Flora e Funga do Brasil.</p></details><button type="button" class="quiet" id="clear">Limpar busca e filtros</button></form>
     <p class="result-count" id="count" role="status"></p><ol id="results" class="entries"></ol><div class="list-actions"><button type="button" id="more" class="button outline" hidden>Mostrar mais</button><button type="button" id="retry" class="button outline" hidden>Tentar novamente</button></div>
   </section>
   <section id="especie" class="paper species" hidden aria-label="Ficha da espécie"></section>
   <section id="riscos" class="paper prose" hidden aria-labelledby="risk-title"><p class="overline">GUIA DE CAMPO · 2026</p><h1 id="risk-title">Legenda de risco</h1><p>As categorias indicam o risco de extinção na natureza na lista nacional da flora.</p><dl id="legend"></dl><a href="#indice">Ir ao índice →</a></section>
   <section id="marcadas" class="paper prose" hidden aria-labelledby="marks-title"><p class="overline">GUIA DE CAMPO · 2026</p><h1 id="marks-title">Páginas marcadas</h1><p>As espécies que você marcar ficam guardadas neste navegador.</p><ol id="marks" class="entries"></ol><a href="#indice">Explorar o índice →</a></section>
-  <section id="sobre" class="paper prose" hidden aria-labelledby="about-title"><p class="overline">GUIA DE CAMPO · 2026</p><h1 id="about-title">Fontes e expediente</h1><p>Guia independente baseado na Portaria GM/MMA nº 1.783, de 26 de outubro de 2026, publicada em 28 de outubro de 2026.</p><p>Cada planta tem espaço para uma carta escrita em primeira pessoa. Você pode escrever e enviar sua carta pela ficha da planta. O texto passa por moderação antes da publicação.</p><p>O catálogo reúne as 3.730 entradas do anexo, entre espécies e táxons infraespecíficos. As categorias foram conferidas com o total publicado pelo MMA. As fichas indicam divergências de grafia, família ou asterisco na extração do anexo quando detectadas.</p><ul><li><a id="official" href="#">Portaria e lista nacional oficial</a></li><li><a href="https://www.gov.br/mma/pt-br/noticias/mma-atualiza-lista-nacional-de-plantas-ameacadas-de-extincao">Resumo do Ministério do Meio Ambiente e Mudança do Clima</a></li><li><a href="https://doi.org/10.15468/1mtkaw">Flora e Funga do Brasil · Jardim Botânico do Rio de Janeiro</a></li><li><a href="https://cncflora.jbrj.gov.br/">CNCFlora · avaliações de risco</a></li><li><a href="https://commons.wikimedia.org/wiki/File:Caesalpinia_echinata_Taub95.png">Prancha da abertura · Paul Taubert, 1891, domínio público</a></li></ul><p id="botany-source"></p><h2>Levar o guia a campo</h2><p>Abra o menu do navegador e escolha “Instalar” ou “Adicionar à Tela de Início”. No iPhone, procure a opção no menu Compartilhar. Depois do primeiro carregamento, as fichas básicas e o índice ficam disponíveis offline neste navegador.</p><button type="button" class="button outline" id="install" hidden>Instalar o guia</button><p id="offline" class="muted" role="status"></p></section>
+  <section id="sobre" class="paper prose" hidden aria-labelledby="about-title"><p class="overline">GUIA DE CAMPO · 2026</p><h1 id="about-title">Sobre o projeto</h1><p>A lista brasileira da flora ameaçada tem 3.730 nomes. Cartas à Flora é um convite a parar em um deles, conhecer a planta e escrever diretamente para ela.</p><p>Você pode contar uma lembrança, fazer uma pergunta ou dizer o que sentiu ao descobrir que ela existe. Juntas, as cartas formam um livro coletivo sobre as plantas que ainda dividem o mundo com a gente.</p><p>Para participar, encontre uma planta sem carta e abra a ficha. Você pode enviar seu texto para revisão editorial, e seu e-mail fica privado.</p><p><a class="button ink-button" href="#indice">Encontrar uma planta</a></p><h2>Fontes e expediente</h2><p>Guia independente baseado na Portaria GM/MMA nº 1.783, de 26 de outubro de 2026, publicada em 28 de outubro de 2026.</p><p>O catálogo reúne as 3.730 entradas do anexo, entre espécies e táxons infraespecíficos. As categorias foram conferidas com o total publicado pelo MMA. As fichas indicam divergências de grafia, família ou asterisco na extração do anexo quando detectadas.</p><ul><li><a id="official" href="#">Portaria e lista nacional oficial</a></li><li><a href="https://www.gov.br/mma/pt-br/noticias/mma-atualiza-lista-nacional-de-plantas-ameacadas-de-extincao">Resumo do Ministério do Meio Ambiente e Mudança do Clima</a></li><li><a href="https://doi.org/10.15468/1mtkaw">Flora e Funga do Brasil · Jardim Botânico do Rio de Janeiro</a></li><li><a href="https://cncflora.jbrj.gov.br/">CNCFlora · avaliações de risco</a></li><li><a href="https://commons.wikimedia.org/wiki/File:Caesalpinia_echinata_Taub95.png">Prancha da abertura · Paul Taubert, 1891, domínio público</a></li></ul><p id="botany-source"></p><h2>Levar o guia a campo</h2><p>Abra o menu do navegador e escolha “Instalar” ou “Adicionar à Tela de Início”. No iPhone, procure a opção no menu Compartilhar. Depois do primeiro carregamento, as fichas básicas e o índice ficam disponíveis offline neste navegador.</p><button type="button" class="button outline" id="install" hidden>Instalar o guia</button><p id="offline" class="muted" role="status"></p></section>
   <noscript><p class="noscript">Ative o JavaScript para folhear as fichas. Você também pode consultar a <a href="https://dados.mma.gov.br/dataset/especies-ameacadas">lista oficial do MMA</a>.</p></noscript>
 </main>
 <footer class="foot"><a href="#sobre">Sobre o projeto</a><a href="#sobre">Instalação e leitura offline</a><span>Brasil · 2026</span></footer>

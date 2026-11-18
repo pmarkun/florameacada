@@ -19,9 +19,13 @@ O serviço roda com Node.js 24. O Dockerfile compila o Worker compartilhado e o 
 | `FLORA_ADMIN_SETUP_HASH` | SHA-256 de um código aleatório de uso único para definir a primeira senha |
 | `FLORA_RATE_KEY` | Segredo aleatório para os limites de envio |
 | `FLORA_MIGRATION_JSON` | Importação inicial do Sites com as listas `letter_submissions` e `moderation_credentials`. O SQLite registra a importação em uma transação e ignora repetições. |
+| `RESEND_API_KEY` | Chave do Resend com permissão de envio |
+| `RESEND_FROM` | Remetente autorizado no Resend, por exemplo `Cartas à Flora <cartas@exemplo.org>` |
 | `FLORA_DATA_DIR` | Diretório local opcional do SQLite. O padrão local é `.data`. No Railway o volume determina o caminho. |
 
 Instale Node.js 24, configure as variáveis e rode `npm run build` seguido de `npm start`. Sem `FLORA_PUBLIC_ORIGIN`, o endereço local é `http://localhost:8080`. O Railway fornece a porta e o caminho do volume.
+
+Com as duas variáveis de e-mail configuradas, a ficha envia um link privado de reserva para o caderno. A reserva dura sete dias e o rascunho pode ser salvo nesse período. O envio do texto segue para a fila de moderação. Enquanto as variáveis estiverem ausentes, a ficha aceita o formulário direto.
 
 As migrações SQL em `drizzle` são compartilhadas pelas duas hospedagens.
 

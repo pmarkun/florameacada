@@ -43,11 +43,20 @@ async function limit(env, kind, value, max, seconds) {
   return Boolean(row);
 }
 
-async function letterState(db, id) {
+async function letterState(env, id) {
+  const db = env.DB;
   const row = await db.prepare(
     'SELECT body, author_name FROM letter_submissions WHERE plant_id = ? AND published_at IS NOT NULL'
   ).bind(id).first();
-  return row ? {state:'published', letter:row.body, author:row.author_name} : {state:'available'};
+  if (row) return {state:'published', letter:row.body, author:row.author_name};
+  const state = await db.prepare(
+    'SELECT EXISTS(SELECT 1 FROM letter_submissions WHERE plant_id=?) AS in_review, ' +
+    'EXISTS(SELECT 1 FROM writing_reservations WHERE plant_id=? AND expires_at>? ' +
+    'AND sent_at IS NOT NULL) AS reserved'
+  ).bind(id, id, now()).first();
+  return {state:state.in_review ? 'review' : state.reserved ? 'reserved' : 'available',
+    reservationByEmail:mailEnabled(env)};
+
 }
 
 function letterFields(data) {
@@ -72,10 +81,123 @@ async function submit(request, env, id) {
   const row = await env.DB.prepare(
     'INSERT INTO letter_submissions (id,plant_id,author_name,author_email,body,created_at) ' +
     'SELECT ?,?,?,?,?,? WHERE NOT EXISTS ' +
-    '(SELECT 1 FROM letter_submissions WHERE plant_id = ? AND published_at IS NOT NULL) RETURNING id'
-  ).bind(crypto.randomUUID(), id, letter.name, email, letter.body, now(), id).first();
+    '(SELECT 1 FROM letter_submissions WHERE plant_id = ?) AND NOT EXISTS ' +
+    '(SELECT 1 FROM writing_reservations WHERE plant_id = ? AND expires_at > ? AND sent_at IS NOT NULL) RETURNING id'
+  ).bind(crypto.randomUUID(), id, letter.name, email, letter.body, now(), id, id, now()).first();
   return row ? json({state:'review', id:row.id}, 201) :
-    json({error:'Esta planta já tem uma carta publicada.'}, 409);
+    json({error:'Esta planta já tem uma reserva ou uma carta.'}, 409);
+}
+
+const reservationSeconds = 7 * 86_400;
+const deliverySeconds = 600;
+const mailEnabled = (env) => Boolean(env.RESEND_API_KEY && env.RESEND_FROM && env.FLORA_RATE_KEY);
+const writingToken = (env, id) => digest('flora-writing:' + env.FLORA_RATE_KEY + ':' + id);
+
+async function reserveWriting(request, env, plantId) {
+  const data = await readJson(request, 2048);
+  const email = emailAddress(data?.email);
+  if (!validEmail(email)) return json({error:'Informe um e-mail válido.'}, 400);
+  const ip = request.headers.get('CF-Connecting-IP');
+  if ((ip && !await limit(env, 'writing-ip', ip, 8, 3600)) ||
+      !await limit(env, 'writing-email', email, 5, 86_400)) {
+    return json({error:'Limite de reservas atingido. Tente mais tarde.'}, 429);
+  }
+
+  const timestamp = now();
+  const id = crypto.randomUUID();
+  const tokenHash = await digest(await writingToken(env, id));
+  await env.DB.prepare('DELETE FROM mail_limits WHERE window_end < ?').bind(timestamp).run();
+  await env.DB.prepare(
+    'DELETE FROM writing_reservations WHERE expires_at <= ? AND ' +
+    'NOT EXISTS (SELECT 1 FROM letter_submissions AS l WHERE l.id = writing_reservations.id)'
+  ).bind(timestamp).run();
+  const created = await env.DB.prepare(
+    'INSERT INTO writing_reservations (plant_id,id,token_hash,email,created_at,expires_at) ' +
+    'SELECT ?,?,?,?,?,? WHERE NOT EXISTS (SELECT 1 FROM letter_submissions WHERE plant_id=?) ' +
+    'ON CONFLICT(plant_id) DO UPDATE SET id=excluded.id,token_hash=excluded.token_hash,email=excluded.email,' +
+    "created_at=excluded.created_at,expires_at=excluded.expires_at,sent_at=NULL,author_name='',body='',version=0 " +
+    'WHERE writing_reservations.expires_at <= ? OR ' +
+    '(writing_reservations.sent_at IS NULL AND writing_reservations.created_at <= ?) ' +
+    'RETURNING id,email,sent_at'
+  ).bind(plantId, id, tokenHash, email, timestamp, timestamp + reservationSeconds, plantId,
+    timestamp, timestamp - deliverySeconds).first();
+  const row = created || await env.DB.prepare(
+    'SELECT id,email,sent_at FROM writing_reservations WHERE plant_id = ? AND email = ? AND expires_at > ? ' +
+    'AND NOT EXISTS (SELECT 1 FROM letter_submissions WHERE plant_id = ?)'
+  ).bind(plantId, email, timestamp, plantId).first();
+  if (!row) return json({error:'Esta planta já tem uma reserva ou uma carta.'}, 409);
+  if (row.sent_at) return json({state:'reserved'});
+  const name = plantNames.get(plantId);
+  const link = new URL('/escrever', request.url);
+  link.hash = await writingToken(env, row.id);
+  try {
+    const result = await fetch('https://api.resend.com/emails', {
+      method:'POST', signal:AbortSignal.timeout(8000),
+      headers:{'Authorization':'Bearer ' + env.RESEND_API_KEY,
+        'Content-Type':'application/json', 'Idempotency-Key':'flora/reserva/' + row.id},
+      body:JSON.stringify({from:env.RESEND_FROM, to:[email], subject:'Seu caderno para ' + name,
+        text:'Você reservou ' + name + ' no Cartas à Flora por sete dias.\n\n' +
+          'Abra seu caderno: ' + link.href + '\n\n' +
+          'Guarde este link para voltar ao rascunho. Quando a carta estiver pronta, envie para publicação. ' +
+          'Ela passa por revisão editorial.\n\nSe você não fez a reserva, pode ignorar esta mensagem.'})
+    });
+    if (!result.ok) return json({error:'Não conseguimos confirmar o envio. Tente de novo com o mesmo e-mail.'}, 502);
+  } catch {
+    return json({error:'Não conseguimos confirmar o envio. Tente de novo com o mesmo e-mail.'}, 502);
+  }
+  await env.DB.prepare('UPDATE writing_reservations SET sent_at = ? WHERE id = ? AND sent_at IS NULL')
+    .bind(now(), row.id).run();
+  return json({state:'reserved'}, 201);
+}
+
+async function writingDesk(request, env) {
+  const data = await readJson(request);
+  if (!/^[a-f0-9]{64}$/.test(data?.token ?? '') || !['open', 'save', 'submit'].includes(data?.action)) {
+    return json({error:'Link do caderno inválido.'}, 400);
+  }
+  const row = await env.DB.prepare(
+    'SELECT r.*, l.published_at, l.id AS submission_id, l.author_name AS submitted_name, l.body AS submitted_body ' +
+    'FROM writing_reservations AS r LEFT JOIN letter_submissions AS l ON l.id = r.id WHERE r.token_hash = ?'
+  ).bind(await digest(data.token)).first();
+  if (!row || (!row.submission_id && row.expires_at <= now())) {
+    return json({error:'Este link expirou ou a reserva foi encerrada. Volte ao guia para escolher uma planta.'}, 410);
+  }
+  const plant = {id:row.plant_id, name:plantNames.get(row.plant_id)};
+  if (row.submission_id) {
+    return json({plant, state:row.published_at ? 'published' : 'review',
+      name:row.submitted_name, letter:row.submitted_body});
+  }
+  if (data.action === 'open') {
+    return json({plant, state:'draft', name:row.author_name, letter:row.body, version:row.version});
+  }
+
+  const name = textInput(data.name);
+  const body = typeof data.letter === 'string' ? data.letter.replace(/\r\n?/g, '\n') : '';
+  if (name.length > 100 || body.length > 8000 ||
+      (data.action === 'submit' && !letterFields(data))) {
+    return json({error:'Use até 100 caracteres no nome e até 8.000 na carta. Preencha os dois para enviar.'}, 400);
+  }
+  if (data.version !== row.version) {
+    return json({error:'O rascunho foi alterado em outra aba. Guarde uma cópia do seu texto antes de atualizar.'}, 409);
+  }
+  const timestamp = now();
+  if (data.action === 'save') {
+    const saved = await env.DB.prepare(
+      'UPDATE writing_reservations SET author_name=?,body=?,version=version+1 WHERE id=? AND version=? ' +
+      'AND expires_at>? AND NOT EXISTS (SELECT 1 FROM letter_submissions WHERE plant_id=?) RETURNING version'
+    ).bind(name, body, row.id, row.version, timestamp, row.plant_id).first();
+    return saved ? json({state:'draft', version:saved.version}) :
+      json({error:'O caderno mudou. Guarde uma cópia do seu texto antes de atualizar.'}, 409);
+  }
+  const added = await env.DB.prepare(
+    'INSERT INTO letter_submissions (id,plant_id,author_name,author_email,body,created_at) ' +
+    'SELECT id,plant_id,?,email,?,? FROM writing_reservations WHERE id=? AND version=? AND expires_at>? ' +
+    'AND NOT EXISTS (SELECT 1 FROM letter_submissions WHERE plant_id=?) RETURNING id'
+  ).bind(name, body.trim(), timestamp, row.id, row.version, timestamp, row.plant_id).first();
+  if (added || await env.DB.prepare('SELECT id FROM letter_submissions WHERE id=?').bind(row.id).first()) {
+    return json({state:'review'}, added ? 201 : 200);
+  }
+  return json({error:'O caderno mudou. Guarde uma cópia do seu texto antes de atualizar.'}, 409);
 }
 
 async function passwordHash(password, salt) {
@@ -203,7 +325,10 @@ async function moderate(request, env, url, id) {
   if (id && request.method === 'POST') {
     const data = await readJson(request);
     if (data?.action === 'delete') {
-      const result = await env.DB.prepare('DELETE FROM letter_submissions WHERE id = ?').bind(id).run();
+      const [result] = await env.DB.batch([
+        env.DB.prepare('DELETE FROM letter_submissions WHERE id = ?').bind(id),
+        env.DB.prepare('DELETE FROM writing_reservations WHERE id = ?').bind(id)
+      ]);
       return result.meta.changes ? json({ok:true}) : json({error:'Carta não encontrada.'}, 404);
     }
     if (!['edit', 'publish'].includes(data?.action)) return json({error:'Ação inválida.'}, 400);
@@ -244,12 +369,21 @@ export default {
           ).first();
           return json({published:row.published, waiting:plantNames.size - row.published, latestPlant:row.latest});
         }
+        if (path === '/api/cartas/publicadas' && request.method === 'GET') {
+          const {results} = await env.DB.prepare(
+            'SELECT plant_id FROM letter_submissions WHERE published_at IS NOT NULL ORDER BY plant_id'
+          ).all();
+          return json({ids:results.map((row) => row.plant_id)});
+        }
+        if (path === '/api/cartas/caderno' && request.method === 'POST') return await writingDesk(request, env);
         const publicLetter = path.match(/^\/api\/cartas\/(\d{1,4})$/);
         if (publicLetter) {
           const id = Number(publicLetter[1]);
           if (!plantNames.has(id)) return json({error:'Planta não encontrada.'}, 404);
-          if (request.method === 'GET') return json(await letterState(env.DB, id));
-          if (request.method === 'POST') return await submit(request, env, id);
+          if (request.method === 'GET') return json(await letterState(env, id));
+          if (request.method === 'POST') {
+            return mailEnabled(env) ? await reserveWriting(request, env, id) : await submit(request, env, id);
+          }
           return json({error:'Método inválido.'}, 405);
         }
         const auth = path.match(/^\/api\/moderacao\/(session|entrar|senha|sair)$/);
@@ -260,11 +394,16 @@ export default {
       }
       const asset = Object.hasOwn(assets, path) ? assets[path] :
         path === '/' ? assets['/index.html'] :
+        path === '/escrever' || path === '/escrever/' ? assets['/caderno.html'] :
         path === '/admin' || path === '/admin/' ? assets['/admin.html'] : null;
       if (!asset || !['GET','HEAD'].includes(request.method)) return new Response('Página não encontrada.', {status:404});
       return new Response(request.method === 'HEAD' ? null : bytes(asset[1]), {headers:{
         'Content-Type':asset[0], 'Cache-Control':'public, max-age=0, must-revalidate',
         'X-Content-Type-Options':'nosniff',
+        ...(asset === assets['/caderno.html'] ? {
+          'Cache-Control':'no-store', 'Referrer-Policy':'no-referrer', 'X-Frame-Options':'DENY',
+          'Content-Security-Policy':"default-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+        } : {}),
         ...(asset === assets['/admin.html'] ? {'X-Frame-Options':'DENY'} : {})
       }});
     } catch {

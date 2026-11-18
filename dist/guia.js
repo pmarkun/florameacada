@@ -69,14 +69,19 @@ const badge = (risk, full = false) => {
     (full ? esc(risk + ' · ' + label) : '<span aria-label="' + esc(label) + '">' + esc(risk) + '</span>') + '</span>';
 };
 const anchor = ([name, url]) => '<a href="' + esc(url) + '">' + esc(name) + '</a>';
+const commonName = (id, scientific) => features[scientific]?.common || botany[id]?.popular?.[0];
 const entry = (item) => {
   const [id, name, family, risk] = item;
-  const common = features[name]?.common;
+  const common = commonName(id, name);
+  const written = publishedPlants?.has(id);
+  const letter = publishedPlants ? '<span class="index-letter' + (written ? ' has-letter' : '') + '">' +
+    (written ? 'Tem carta' : 'Sem carta') + '</span>' : '';
   return '<li><a class="entry" href="' + rowHash(id) + '"><span><strong>' + (common ? esc(common) : '<i>' + esc(name) + '</i>') +
     '</strong>' + (common ? '<small><i>' + esc(name) + '</i></small>' : '') + '</span><span class="family-name">' +
-    esc(family) + '</span>' + badge(risk) + '</a></li>';
+    esc(family) + '</span><span class="index-status">' + badge(risk) + letter + '</span></a></li>';
 };
 
+let publishedPlants = null;
 let all = [];
 let byId = new Map();
 let botany = {};
@@ -138,6 +143,18 @@ function loadCatalog() {
   return loading;
 }
 
+async function loadPublishedPlants() {
+  try {
+    const result = await fetch('/api/cartas/publicadas', {cache:'no-store', signal:AbortSignal.timeout(5000)});
+    if (!result.ok) return;
+    const data = await result.json();
+    publishedPlants = new Set(data.ids);
+    $('letter-filter').disabled = false;
+  } catch {
+    // The offline catalog still works without live letter status.
+  }
+}
+
 function renderCatalog(reset = false) {
   if (reset) limit = 40;
   const terms = normalize($('q').value).split(' ').filter(Boolean);
@@ -145,7 +162,9 @@ function renderCatalog(reset = false) {
   const family = $('family').value;
   const domain = $('domain').value;
   const state = $('state').value;
+  const letter = $('letter-filter').value;
   filtered = all.filter((item) => (!risk || item[3] === risk || (risk === 'CR' && item[3] === 'CR (PE)')) &&
+    (!letter || !publishedPlants || publishedPlants.has(item[0]) === (letter === 'published')) &&
     (!family || item[2] === family) && (!domain || botany[item[0]]?.dominios?.includes(domain)) &&
     (!state || botany[item[0]]?.uf?.includes(state)) && terms.every((term) => item.search.includes(term)));
   $('count').textContent = filtered.length ? number.format(filtered.length) + (filtered.length === 1 ? ' registro' : ' registros') : 'Nenhum registro encontrado. Tente outro termo ou limpe os filtros.';
@@ -297,21 +316,33 @@ function showLetter(section, id, label, data) {
     return;
   }
 
-  section.innerHTML = '<button type="button" class="button ink-button">Quero reservar essa planta.</button>';
+  if (data.state === 'review') {
+    section.innerHTML = '<p class="letter-note">Já há uma carta em revisão para esta planta.</p>';
+    return;
+  }
+  if (data.state === 'reserved') {
+    section.innerHTML = '<p class="letter-note">Esta planta está reservada. Use o link que recebeu por e-mail para escrever.</p>';
+    return;
+  } else {
+    section.innerHTML = '<button type="button" class="button ink-button">Quero reservar essa planta.</button>';
+  }
   const opener = section.querySelector('button');
-  opener.onclick = () => openLetterForm(section, id, label, opener);
+  opener.onclick = () => openLetterForm(section, id, label, opener, data.reservationByEmail);
 }
 
-function openLetterForm(section, id, label, opener) {
+function openLetterForm(section, id, label, opener, reservationByEmail) {
   const dialog = $('adoption-dialog');
   dialog.innerHTML = '<form method="dialog" class="adoption-close"><button type="submit" aria-label="Fechar">×</button></form>' +
     '<h2 id="adoption-title">Uma carta para ' + esc(label) + '</h2>' +
     '<form class="claim-form">' +
-    '<label for="letter-name">Seu nome</label><input id="letter-name" name="name" maxlength="100" autocomplete="name" required>' +
+    (reservationByEmail ? '' :
+      '<label for="letter-name">Seu nome</label><input id="letter-name" name="name" maxlength="100" autocomplete="name" required>') +
     '<label for="letter-email">Seu e-mail</label><input id="letter-email" type="email" name="email" maxlength="254" autocomplete="email" required>' +
-    '<label for="letter-body">Sua carta</label><textarea id="letter-body" name="letter" rows="7" maxlength="8000" required></textarea>' +
-    '<p class="form-note">A carta passa por moderação. Se for publicada, seu nome aparece junto ao texto. Seu e-mail fica privado.</p>' +
-    '<button class="button ink-button" type="submit">Enviar carta</button>' +
+    (reservationByEmail ?
+      '<p class="form-note">Você recebe um link privado para escrever. A reserva dura sete dias.</p>' :
+      '<label for="letter-body">Sua carta</label><textarea id="letter-body" name="letter" rows="7" maxlength="8000" required></textarea>' +
+      '<p class="form-note">A carta passa por moderação. Se for publicada, seu nome aparece junto ao texto. Seu e-mail fica privado.</p>') +
+    '<button class="button ink-button" type="submit">' + (reservationByEmail ? 'Enviar link do caderno' : 'Enviar carta') + '</button>' +
     '<p class="claim-status" role="status"></p></form>';
   const form = dialog.querySelector('.claim-form');
   const status = form.querySelector('.claim-status');
@@ -320,7 +351,7 @@ function openLetterForm(section, id, label, opener) {
     event.preventDefault();
     const submit = form.querySelector('button');
     submit.disabled = true;
-    status.textContent = 'Enviando sua carta…';
+    status.textContent = reservationByEmail ? 'Solicitando o link…' : 'Enviando sua carta…';
     try {
       const result = await fetch('/api/cartas/' + id, {method:'POST', headers:{'Content-Type':'application/json'},
         body:JSON.stringify(Object.fromEntries(new FormData(form)))});
@@ -330,7 +361,8 @@ function openLetterForm(section, id, label, opener) {
         return;
       }
       if (section.isConnected) {
-        section.innerHTML = '<p class="letter-invite" role="status" tabindex="-1">Sua carta foi enviada para moderação.</p>';
+        section.innerHTML = '<p class="letter-invite" role="status" tabindex="-1">' +
+          (reservationByEmail ? 'Confira seu e-mail para abrir o caderno.' : 'Sua carta foi enviada para moderação.') + '</p>';
       }
       if (form.isConnected && dialog.open) {
         dialog.close();
@@ -343,7 +375,7 @@ function openLetterForm(section, id, label, opener) {
     }
   };
   dialog.showModal();
-  form.elements.name.focus();
+  (reservationByEmail ? form.elements.email : form.elements.name).focus();
 }
 
 function occurrenceMap(profile) {
@@ -413,7 +445,8 @@ function renderReader(item) {
     review ? 'A grafia ou família publicada tem divergência entre as transcrições consultadas.' : ''
   ].filter(Boolean).map((note) => '<p class="muted">' + note + '</p>').join('');
   const profile = botany[id];
-  const label = feature?.common || name;
+  const common = commonName(id, name);
+  const label = common || name;
   const back = readerScope?.kind === 'marcadas' ? 'marcadas' : 'indice';
   const map = occurrenceMap(profile);
   $('especie').innerHTML =
@@ -422,8 +455,8 @@ function renderReader(item) {
     (marks.has(id) ? 'Marcada' : 'Marcar') + '</button><button id="share" class="button outline">Compartilhar</button></div></div>' +
     '<div class="reader-grid species-spread">' +
     '<header class="letter-heading"><div><p class="overline">CARTAS À FLORA BRASILEIRA</p>' +
-    '<h1 tabindex="-1">' + (feature?.common ? esc(label) : '<i>' + esc(label) + '</i>') + '</h1>' +
-    (feature?.common ? '<p class="scientific">' + esc(name) + '</p>' : '') + '</div>' + riskStamp(risk) + '</header>' +
+    '<h1 tabindex="-1">' + (common ? esc(label) : '<i>' + esc(label) + '</i>') + '</h1>' +
+    (common ? '<p class="scientific">' + esc(name) + '</p>' : '') + '</div>' + riskStamp(risk) + '</header>' +
     '<div class="species-reading"><div class="species-botany" id="botany-profile">' + botanicalProfile(profile) + '</div>' +
     '<section class="letter-page" aria-labelledby="letter-title"><span class="letter-ornament" aria-hidden="true">◆</span>' +
     '<h2 id="letter-title">Carta para ' + esc(label) + '</h2><div id="letter-content" aria-live="polite">' +
@@ -455,7 +488,6 @@ function renderReader(item) {
     requestedDirection = 0;
   }
   document.title = label + ' · Cartas à Flora';
-  if (write('last', id)) setResume(id);
   $('prev').onclick = () => turn(prev, -1);
   $('next').onclick = () => turn(next, 1);
   $('mark').onclick = () => {
@@ -488,11 +520,6 @@ function renderReader(item) {
   };
 }
 
-function setResume(id) {
-  if (!id) return;
-  $('resume').href = rowHash(id);
-  $('resume').hidden = false;
-}
 function turn(item, direction) {
   if (!item) return;
   requestedDirection = direction;
@@ -552,8 +579,11 @@ async function route() {
     try { await loadCatalog(); }
     catch { if (routeKey() === key) showError(section); return; }
     if (routeKey() !== key) return;
-    if (section === 'indice') renderCatalog();
-    if (section === 'marcadas') renderMarks();
+    if (section === 'indice' || section === 'marcadas') {
+      const render = section === 'indice' ? renderCatalog : renderMarks;
+      render();
+      loadPublishedPlants().then(() => { if (routeKey() === key) render(); });
+    }
     if (section === 'especie') {
       const item = byId.get(Number(idText));
       if (item) renderReader(item);
@@ -572,7 +602,7 @@ async function route() {
 
 $('search-form').addEventListener('submit', (e) => { e.preventDefault(); if (all.length) renderCatalog(true); });
 $('q').addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { if (all.length) renderCatalog(true); }, 100); });
-['risk','family','domain','state'].forEach((id) => $(id).addEventListener('change', () => { if (all.length) renderCatalog(true); }));
+['risk','family','domain','state','letter-filter'].forEach((id) => $(id).addEventListener('change', () => { if (all.length) renderCatalog(true); }));
 $('clear').onclick = () => { $('search-form').reset(); if (all.length) renderCatalog(true); $('q').focus(); };
 $('more').onclick = () => {
   const firstNew = limit;
@@ -612,7 +642,6 @@ $('especie').addEventListener('touchcancel', () => { touchStart = null; }, {pass
 addEventListener('hashchange', route);
 $('legend').innerHTML = Object.entries(risks).map(([code, info]) => '<dt>' + badge(code, true) + '</dt><dd>' + esc(info[2]) + '</dd>').join('');
 $('official').href = official;
-setResume(read('last', null));
 addEventListener('beforeinstallprompt', (event) => { event.preventDefault(); installPrompt = event; $('install').hidden = false; });
 $('install').onclick = async () => {
   if (!installPrompt) return;

@@ -203,3 +203,12 @@ main{max-width:1240px;margin:0 auto;padding:36px 42px 34px;min-height:76vh} .boo
   .letter-frontispiece {padding:31px 37px 20px}
   .cover-envelope {max-width:340px}
 }
+
+#search-form>.filters {grid-template-columns:repeat(3,minmax(0,1fr))}
+.index-status {display:flex;align-items:center;justify-content:flex-end;gap:9px;flex-wrap:wrap}
+.index-letter {font-size:13px;line-height:1.15;color:#5b5544;white-space:nowrap}
+.index-letter.has-letter {color:#224233;font-weight:700;border-bottom:1px solid #829078;padding-bottom:2px}
+@media(max-width:640px) {
+  #search-form>.filters {grid-template-columns:repeat(2,minmax(0,1fr))}
+  .index-status {display:grid;justify-items:end;gap:2px}
+}
