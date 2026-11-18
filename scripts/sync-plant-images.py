@@ -164,6 +164,7 @@ GBIF_COLLECTIONS = {
     "7a3679ef-5582-4aaa-81f0-8c2545cafc81": "Pl@ntNet via GBIF",
     "4300f8d5-1ae5-49e5-a101-63894b005868": "Herbário RB via GBIF",
     "e6694e54-1cd6-4527-a26e-387518ea550a": "Reflora · Herbário RBR via GBIF",
+    "f9768501-2d57-4b8b-90a9-3ba5cf6dad3e": "Reflora · Herbário do Museu Nacional via GBIF",
 }
 
 
@@ -221,6 +222,8 @@ PRIORITY = {"gravura":0,"foto":1,"herbario":2}
 
 
 def source_id(source):
+    if source == "Herbário do Kew":
+        return "kew-curated"
     if "Commons" in source:
         return "commons"
     if source.startswith("Openverse"):

@@ -465,9 +465,11 @@ function renderReader(item) {
   const prev = order[index - 1];
   const next = order[index + 1];
 
+  const profile = botany[id];
   const emptyPlate = '<figure class="feature-plate empty-plate" aria-label="Espaço da prancha">' +
     '<figcaption><span>Prancha a ilustrar</span>' +
-    (feature?.photoReference ? anchor(feature.photoReference) : '') + '</figcaption></figure>';
+    (feature?.photoReference ? anchor(feature.photoReference) : '') +
+    (profile ? anchor(['Consultar o acervo no Reflora', taxonLink(profile)]) : '') + '</figcaption></figure>';
   const imported = illustrations[id];
   const useImported = imported && (!feature?.image || (imported.kind === 'gravura' && id !== 1705));
   const medium = imported?.kind === 'gravura' ? 'Gravura botânica' :
@@ -486,7 +488,6 @@ function renderReader(item) {
     isNew === null ? 'O asterisco de inclusão na lista está em conferência.' : '',
     review ? 'A grafia ou família publicada tem divergência entre as transcrições consultadas.' : ''
   ].filter(Boolean).map((note) => '<p class="muted">' + note + '</p>').join('');
-  const profile = botany[id];
   const common = commonName(id, name);
   const label = common || name;
   const back = readerScope?.kind === 'marcadas' ? 'marcadas' : 'indice';
