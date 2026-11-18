@@ -151,3 +151,55 @@ main{max-width:1240px;margin:0 auto;padding:36px 42px 34px;min-height:76vh} .boo
   padding:5px .3em;line-height:1;text-decoration:underline;text-underline-offset:.15em
 }
 .letter-ellipsis:hover {color:#783a2b}
+
+/* A capa de Cartas à Flora e o envelope da prancha. */
+.correspondence-book {
+  min-height:555px;
+  grid-template-columns:minmax(0,1.11fr) minmax(0,1fr);
+}
+.correspondence-book .cover h1 {font-size:clamp(64px,8.4vw,118px);margin-bottom:20px}
+.correspondence-book .intro {max-width:30ch;margin-bottom:23px}
+.home-totals {
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px;
+  padding:13px 0 16px;margin-bottom:22px;border-block:1px solid #d8b77665;
+}
+.home-totals div {display:grid;align-content:start;gap:3px}
+.home-totals div+div {padding-left:15px;border-left:1px solid #d8b77665}
+.home-totals strong {color:#ead09a;font:600 clamp(31px,4vw,46px)/1 var(--serif);font-variant-numeric:lining-nums}
+.home-totals span {font-size:14px;line-height:1.15;color:#f5e6ca}
+.cover-search {border-color:#d6be8c99;color:#fff1d4}
+.cover-search:hover {background:#f6e2b51c}
+.correspondence-book .cover-actions {gap:9px}
+.home-status {font-size:14px;margin:9px 0 0;color:#f1dfba}
+.home-status:empty {display:none}
+.letter-frontispiece {
+  align-content:center;justify-items:center;gap:20px;
+  padding:clamp(26px,5vw,62px) clamp(26px,4vw,48px);
+}
+.cover-envelope {
+  display:grid;place-items:center;position:relative;isolation:isolate;width:100%;margin-top:25px;
+  padding:0 7% 6%;border-radius:4px;background:#d9bd8f;
+  box-shadow:1px 9px 22px #6948293d;
+}
+.cover-envelope::after {
+  content:"";position:absolute;inset:0;border:1px solid #87674654;border-radius:4px;pointer-events:none;
+  background:linear-gradient(31deg,#d8b989 0 34%,#9f7b5150 34.2% 34.7%,transparent 35%),
+    linear-gradient(-31deg,#e3c89e 0 34%,#9f7b5150 34.2% 34.7%,transparent 35%);
+}
+.cover-letter {
+  width:100%;margin-top:-34px;padding:13px;
+  border:1px solid #b19d75;background:#fbf0d7;box-shadow:0 3px 10px #71533332;
+  transform:rotate(-5deg);
+}
+.cover-letter img {margin:0;height:auto;width:100%;max-height:none}
+.letter-frontispiece figcaption {margin:0}
+@media(max-width:640px) {
+  .correspondence-book {min-height:0}
+  .correspondence-book .cover-inner {min-height:0;padding:26px 19px}
+  .correspondence-book .cover h1 {font-size:clamp(53px,13vw,76px);margin-bottom:14px}
+  .correspondence-book .intro {margin-bottom:17px}
+  .home-totals {padding:10px 0 12px;margin-bottom:16px}
+  .correspondence-book .cover-actions .button {padding-inline:11px}
+  .letter-frontispiece {padding:31px 37px 20px}
+  .cover-envelope {max-width:340px}
+}

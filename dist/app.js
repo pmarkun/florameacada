@@ -454,7 +454,7 @@ function renderReader(item) {
     requestAnimationFrame(() => $('especie').classList.add('turn'));
     requestedDirection = 0;
   }
-  document.title = label + ' · Flora ameaçada do Brasil';
+  document.title = label + ' · Cartas à Flora';
   if (write('last', id)) setResume(id);
   $('prev').onclick = () => turn(prev, -1);
   $('next').onclick = () => turn(next, 1);
@@ -508,6 +508,28 @@ function showError(section) {
     $('reload').onclick = route;
   }
 }
+async function loadHomeTotals() {
+  const readLink = $('read-a-letter');
+  const findLink = $('find-a-plant');
+  const status = $('home-status');
+  try {
+    const response = await fetch('/api/cartas/resumo', {cache:'no-store', signal:AbortSignal.timeout(6500)});
+    if (!response.ok) throw new Error('Contagem indisponível');
+    const {published, waiting, latestPlant} = await response.json();
+    $('published-total').textContent = number.format(published);
+    $('waiting-total').textContent = number.format(waiting);
+    $('published-label').textContent = published === 1 ? 'carta publicada' : 'cartas publicadas';
+    $('waiting-label').textContent = waiting === 1 ? 'planta sem carta' : 'plantas sem carta';
+    readLink.hidden = latestPlant === null;
+    if (latestPlant !== null) readLink.href = '/?carta=' + latestPlant + rowHash(latestPlant);
+    findLink.classList.toggle('gold', latestPlant === null);
+    findLink.classList.toggle('cover-search', latestPlant !== null);
+    status.textContent = '';
+  } catch {
+    status.textContent = 'A contagem de cartas está indisponível agora.';
+  }
+}
+
 function routeKey() { return location.hash.slice(1) || 'capa'; }
 async function route() {
   const key = routeKey();
@@ -520,7 +542,7 @@ async function route() {
     if (link.dataset.nav === section) link.setAttribute('aria-current','page');
     else link.removeAttribute('aria-current');
   });
-  document.title = 'Flora ameaçada do Brasil · Guia de campo 2026';
+  document.title = 'Cartas à Flora · Plantas ameaçadas do Brasil';
   const previous = active;
   active = section;
   if (section !== 'especie' && section !== 'indice' && section !== 'marcadas') readerScope = null;
@@ -539,6 +561,7 @@ async function route() {
     }
   }
   if (section === 'sobre') loadCatalog().catch(() => {});
+  if (section === 'capa') loadHomeTotals();
   const heading = $(section).querySelector('h1');
   if (heading && previous) {
     heading.tabIndex = -1;

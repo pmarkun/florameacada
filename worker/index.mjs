@@ -235,6 +235,15 @@ export default {
           return json({error:'Origem ou formato inválido.'}, 403);
         }
         if (!env.DB) return json({error:'As cartas estão temporariamente indisponíveis.'}, 503);
+        if (path === '/api/cartas/resumo') {
+          if (request.method !== 'GET') return json({error:'Método inválido.'}, 405);
+          const row = await env.DB.prepare(
+            'SELECT COUNT(*) AS published, (SELECT plant_id FROM letter_submissions ' +
+            'WHERE published_at IS NOT NULL ORDER BY published_at DESC, plant_id LIMIT 1) AS latest ' +
+            'FROM letter_submissions WHERE published_at IS NOT NULL'
+          ).first();
+          return json({published:row.published, waiting:plantNames.size - row.published, latestPlant:row.latest});
+        }
         const publicLetter = path.match(/^\/api\/cartas\/(\d{1,4})$/);
         if (publicLetter) {
           const id = Number(publicLetter[1]);
