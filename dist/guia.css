@@ -216,3 +216,6 @@ main{max-width:1240px;margin:0 auto;padding:36px 42px 34px;min-height:76vh} .boo
 .science-sources {margin:8px 0 16px;padding-inline-start:20px}
 .science-sources li {margin:5px 0;overflow-wrap:anywhere}
 .science-sources a {padding-block:3px}
+
+.rb-plate canvas {display:block;margin:auto;max-width:100%;max-height:420px;width:auto;height:auto}
+.rb-progress {margin:12px auto;text-align:center;color:var(--muted)}

@@ -37,3 +37,5 @@ O importador procura o nome aceito, a grafia da portaria e sinônimos do Jardim 
 A seleção prioriza gravuras identificadas no título ou na descrição, seguidas de fotografia e exsicata. Exige página de origem, crédito e licença do item (domínio público, CC0, CC BY ou CC BY-SA). Para fotos de ocorrências, cruza o táxon em vez de usar apenas o nome da busca. A página do guia mostra o crédito e a licença ao lado da imagem.
 
 `dist/pranchas.json` tem a primeira candidata por espécie. O guia carrega a imagem da fonte com ligação à página original. Para atualizar o site, publique o manifesto com a rotina normal de build. O catálogo permanece utilizável enquanto a busca roda. Quando uma fonte falha, o script preserva as imagens já selecionadas.
+
+Também é possível cruzar o catálogo com o [ZIP do Herbário RB](https://ipt.jbrj.gov.br/reflora/resource?r=rb_herbarium) usando `python scripts/index-reflora-rb.py caminho/para/arquivo.zip`. O comando grava `dist/reflora-rb.json` com uma exsicata por ficha correspondente. As prévias são montadas no navegador a partir do Deep Zoom público do acervo, somente quando entram na área de leitura.

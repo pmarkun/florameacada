@@ -88,6 +88,7 @@ let botany = {};
 let botanyReady = false;
 let brazilMap = null;
 let illustrations = {};
+let rbSheets = {};
 let filtered = [];
 let marks = new Set(read('marks', []));
 let limit = 40;
@@ -107,9 +108,10 @@ function loadCatalog() {
     if (!response.ok) throw new Error('Dados indisponíveis');
     return response.json();
   };
-  loading = Promise.all([getJson('/catalogo.json'), getJson('/botanica.json').catch(() => null), getJson('/mapa-brasil.json').catch(() => null), getJson('/pranchas.json').catch(() => ({}))])
-    .then(([rows, data, map, images]) => {
+  loading = Promise.all([getJson('/catalogo.json'), getJson('/botanica.json').catch(() => null), getJson('/mapa-brasil.json').catch(() => null), getJson('/pranchas.json?v=2').catch(() => ({})), getJson('/reflora-rb.json?v=1').catch(() => ({}))])
+    .then(([rows, data, map, images, sheets]) => {
       illustrations = images;
+      rbSheets = sheets;
       brazilMap = map;
       const collator = new Intl.Collator('pt-BR');
       all = rows.sort((a, b) => collator.compare(a[1], b[1]));
@@ -479,8 +481,16 @@ function renderReader(item) {
     '<figcaption><span>' + esc(medium) + ' · ' + esc(imported.source) + '</span><br>' +
     anchor([imported.credit,imported.page]) + ' · ' + anchor([imported.license,imported.license_url]) +
     '</figcaption></figure>' : '';
-  const figure = importedPlate || (feature?.image ? '<figure class="figure feature-plate"><img alt="' + esc(feature.alt) + '" src="' + feature.image +
+  const regularPlate = importedPlate || (feature?.image ? '<figure class="figure feature-plate"><img alt="' + esc(feature.alt) + '" src="' + feature.image +
     '"><figcaption>' + anchor(feature.credit) + (feature.license ? '<br>' + anchor(feature.license) : '') + '</figcaption></figure>' : emptyPlate);
+  const rb = rbSheets[id];
+  const rbCredits = rb ? [['Reflora · Herbário RB · ' + rb[1], refloraImageSource(rb)], ['CC BY 4.0', rbLicense]] : [];
+  const useRb = rb && (!feature?.image && (!useImported || imported.kind === 'herbario'));
+  const rbPlate = useRb ? '<figure class="figure feature-plate rb-plate"><canvas role="img" hidden aria-label="' +
+    esc('Exsicata de ' + name + ', Herbário RB') + '"></canvas><p class="rb-progress">Carregando exemplar de herbário…</p>' +
+    '<figcaption>Exemplar de herbário · ' + anchor(rbCredits[0]) + ' · ' + anchor(rbCredits[1]) +
+    '</figcaption></figure>' : '';
+  const figure = rbPlate || regularPlate;
   const description = feature?.sections?.filter(([title]) => !['Onde vive','O que mudou'].includes(title))
     .map(([title, copy]) => '<h3>' + esc(title) + '</h3><p>' + esc(copy) + '</p>').join('') ?? '';
   const notice = [
@@ -500,7 +510,7 @@ function renderReader(item) {
     ...(feature?.links?.some(([source]) => source.includes('CNCFlora')) ? [] : [['Avaliações e dados de conservação · CNCFlora', 'https://cncflora.jbrj.gov.br/']]),
     ...(map ? [['Malha territorial · IBGE', 'https://geoftp.ibge.gov.br/organizacao_do_territorio/malhas_territoriais/malhas_municipais/municipio_2025/Brasil/']] : [])
   ];
-  const plateSources = useImported ? [[imported.credit,imported.page],[imported.license,imported.license_url]] :
+  const plateSources = useRb ? rbCredits : useImported ? [[imported.credit,imported.page],[imported.license,imported.license_url]] :
     feature?.image ? [feature.credit, ...(feature.license ? [feature.license] : [])] :
     feature?.photoReference ? [feature.photoReference] : [];
   const notes = '<details class="field-notes"><summary>Informações científicas</summary><div class="notes-body">' +
@@ -529,12 +539,23 @@ function renderReader(item) {
     (prev ? '' : 'disabled') + '>← Anterior</button><span>' + number.format(index + 1) + ' de ' + number.format(order.length) +
     '</span><button class="button outline" id="next" ' + (next ? '' : 'disabled') + '>Próxima →</button></nav>' +
     '<p id="reader-status" class="muted" role="status"></p>';
-  const importedImage = useImported && $('especie').querySelector('.feature-plate img');
-  if (importedImage) importedImage.addEventListener('error',() => {
-    const plate = importedImage.closest('figure');
-    plate.outerHTML = '<figure class="feature-plate empty-plate"><figcaption>' +
-      '<span>Imagem indisponível</span>' + anchor(['Ver prancha na fonte',imported.page]) + '</figcaption></figure>';
-  },{once:true});
+  function watchImage() {
+    const importedImage = useImported && $('especie').querySelector('.feature-plate img');
+    if (importedImage) importedImage.addEventListener('error',() => {
+      const plate = importedImage.closest('figure');
+      plate.outerHTML = '<figure class="feature-plate empty-plate"><figcaption>' +
+        '<span>Imagem indisponível</span>' + anchor(['Ver prancha na fonte',imported.page]) + '</figcaption></figure>';
+    },{once:true});
+  }
+  if (useRb) {
+    const rbFigure = $('especie').querySelector('.rb-plate');
+    observeRefloraPreview(rbFigure, rb, importedPlate ? () => {
+      rbFigure.outerHTML = regularPlate;
+      watchImage();
+    } : undefined);
+  } else {
+    watchImage();
+  }
   loadLetter($('letter-content'),id,label);
   const liveButton = $('live-botany');
   if (liveButton) liveButton.onclick = () => checkLiveBotany(item, profile, liveButton, $('live-botany-status'));
