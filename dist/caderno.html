@@ -8,9 +8,9 @@
 <meta name="theme-color" content="#f1e9d6">
 <title>Caderno · Cartas à Flora</title>
 <link rel="icon" href="/icone-192.png">
-<link rel="stylesheet" href="/caderno.css?v=1">
+<link rel="stylesheet" href="/caderno.css?v=2">
 <script src="/prazo.js?v=1" defer></script>
-<script src="/caderno.js?v=2" defer></script>
+<script src="/caderno.js?v=3" defer></script>
 </head>
 <body>
 <main>
@@ -22,6 +22,11 @@
       <time id="deadline" class="hint" hidden></time>
     </header>
     <p id="notice" role="status">Abrindo o caderno…</p>
+    <section id="confirmation" class="confirmation" aria-labelledby="confirmation-title" hidden>
+      <h2 id="confirmation-title" tabindex="-1"></h2>
+      <p id="confirmation-message"></p>
+      <a id="confirmation-link" href="/">Voltar à ficha da planta</a>
+    </section>
     <form id="write" hidden>
       <label for="letter" class="sr-only">Sua carta</label>
       <textarea id="letter" maxlength="8000" placeholder="Comece aqui…" autocomplete="off" spellcheck="true"></textarea>

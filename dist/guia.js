@@ -324,7 +324,7 @@ function showLetter(section, id, label, data) {
   const title = page.querySelector('#letter-title');
   const published = data.state === 'published';
   page.classList.toggle('letter-page-invite', !published);
-  title.textContent = published ? 'Carta para ' + label : 'Escreva uma carta para ' + label + '.';
+  title.textContent = published ? 'Carta para ' + label : 'Cara ' + label + '…';
 
   if (published) {
     const paragraphs = data.letter.trim().split(/\n[^\S\n]*\n+/);
@@ -364,7 +364,7 @@ function showLetter(section, id, label, data) {
     showReservationDeadline(section.querySelector('time'), data.expiresAt);
     return;
   } else {
-    section.innerHTML = '<button type="button" class="button ink-button">Quero reservar essa planta.</button>';
+    section.innerHTML = '<button type="button" class="button ink-button">Quero escrever uma carta.</button>';
   }
   const opener = section.querySelector('button');
   opener.onclick = () => openLetterForm(section, id, label, opener, data.reservationByEmail);
@@ -379,7 +379,7 @@ function openLetterForm(section, id, label, opener, reservationByEmail) {
       '<label for="letter-name">Seu nome</label><input id="letter-name" name="name" maxlength="100" autocomplete="name" required>') +
     '<label for="letter-email">Seu e-mail</label><input id="letter-email" type="email" name="email" maxlength="254" autocomplete="email" required>' +
     (reservationByEmail ?
-      '<p class="form-note">Você recebe um link privado para escrever. A reserva dura sete dias.</p>' :
+      '<p class="form-note">Você recebe por e-mail o link privado do seu caderno e algumas informações sobre a planta. O link fica disponível por sete dias.</p>' :
       '<label for="letter-body">Sua carta</label><textarea id="letter-body" name="letter" rows="7" maxlength="8000" required></textarea>' +
       '<p class="form-note">A carta passa por moderação. Se for publicada, seu nome aparece junto ao texto. Seu e-mail fica privado.</p>') +
     '<button class="button ink-button" type="submit">' + (reservationByEmail ? 'Enviar link do caderno' : 'Enviar carta') + '</button>' +
@@ -465,9 +465,11 @@ let viewerWentFullscreen = false;
 
 function addPlateViewer(figure, image, deepZoom) {
   const button = document.createElement('button');
-  button.className = 'button outline plate-enlarge';
+  button.className = 'plate-enlarge';
   button.type = 'button';
-  button.textContent = 'Ampliar imagem';
+  button.setAttribute('aria-label', 'Ampliar imagem');
+  button.title = 'Ampliar imagem';
+  for (let corner = 0; corner < 4; corner++) button.append(document.createElement('span'));
   button.addEventListener('click', () => openPlateViewer(figure, image, deepZoom, button));
   figure.append(button);
 }

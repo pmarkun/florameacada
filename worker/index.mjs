@@ -93,6 +93,16 @@ const deliverySeconds = 600;
 const mailEnabled = (env) => Boolean(env.RESEND_API_KEY && env.RESEND_FROM && env.FLORA_RATE_KEY);
 const writingToken = (env, id) => digest('flora-writing:' + env.FLORA_RATE_KEY + ':' + id);
 
+const riskDescriptions = {
+  VU:'Vulnerável',
+  EN:'Em perigo',
+  CR:'Criticamente em perigo',
+  'CR (PE)':'Criticamente em perigo, possivelmente extinta'
+};
+const writingExpiration = new Intl.DateTimeFormat('pt-BR', {
+  dateStyle:'long', timeStyle:'short', timeZone:'America/Sao_Paulo'
+});
+
 async function reserveWriting(request, env, plantId) {
   const data = await readJson(request, 2048);
   const email = emailAddress(data?.email);
@@ -127,19 +137,33 @@ async function reserveWriting(request, env, plantId) {
   ).bind(plantId, email, timestamp, plantId).first();
   if (!row) return json({error:'Esta planta já tem uma reserva ou uma carta.'}, 409);
   if (row.sent_at) return json({state:'reserved', expiresAt:row.expires_at});
-  const name = plantNames.get(plantId);
+  const plant = plants.get(plantId);
   const link = new URL('/escrever', request.url);
   link.hash = await writingToken(env, row.id);
+  const species = new URL('/#especie/' + plantId, request.url);
+  const facts = [
+    'Nome científico: ' + plant.name,
+    plant.popular?.length && 'Nomes populares: ' + plant.popular.join(', '),
+    'Família: ' + plant.family,
+    'Categoria nacional de ameaça: ' + riskDescriptions[plant.risk] + ' (' + plant.risk + ')',
+    plant.habit?.length && 'Forma de vida: ' + plant.habit.join(', '),
+    plant.domains?.length && 'Domínios naturais: ' + plant.domains.join(', ')
+  ].filter(Boolean);
+  const deadline = writingExpiration.format(row.expires_at * 1000);
   try {
     const result = await fetch('https://api.resend.com/emails', {
       method:'POST', signal:AbortSignal.timeout(8000),
       headers:{'Authorization':'Bearer ' + env.RESEND_API_KEY,
         'Content-Type':'application/json', 'Idempotency-Key':'flora/reserva/' + row.id},
-      body:JSON.stringify({from:env.RESEND_FROM, to:[email], subject:'Seu caderno para ' + name,
-        text:'Você reservou ' + name + ' no Cartas à Flora por sete dias.\n\n' +
-          'Abra seu caderno: ' + link.href + '\n\n' +
-          'Guarde este link para voltar ao rascunho. Quando a carta estiver pronta, envie para publicação. ' +
-          'Ela passa por revisão editorial.\n\nSe você não fez a reserva, pode ignorar esta mensagem.'})
+      body:JSON.stringify({from:env.RESEND_FROM, to:[email], subject:'Seu caderno para ' + plant.name,
+        text:'Seu caderno para escrever a ' + plant.name + ' está aberto.\n\n' +
+          'Abra seu caderno: ' + link.href + '\n' +
+          'Você tem até ' + deadline + ' (horário de Brasília) para enviar a carta. Guarde este link privado para voltar ao rascunho.\n\n' +
+          'Para conhecer sua destinatária\n' + facts.join('\n') + '\n\n' +
+          'Veja a ficha da planta no guia: ' + species.href + '\n\n' +
+          'Se quiser, comece com “Cara ' + plant.name + '…” e diga a ela o que você gostaria que soubesse. ' +
+          'Quando terminar, assine e envie a carta pelo caderno. Ela passa por revisão antes de ser publicada.\n\n' +
+          'Cartas à Flora\n\nSe você não pediu este caderno, pode ignorar este e-mail.'})
     });
     if (!result.ok) return json({error:'Não conseguimos confirmar o envio. Tente de novo com o mesmo e-mail.'}, 502);
   } catch {
@@ -162,7 +186,7 @@ async function writingDesk(request, env) {
   if (!row || (!row.submission_id && row.expires_at <= now())) {
     return json({error:'Este link expirou ou a reserva foi encerrada. Volte ao guia para escolher uma planta.'}, 410);
   }
-  const plant = {id:row.plant_id, name:plantNames.get(row.plant_id)};
+  const plant = {id:row.plant_id, name:plants.get(row.plant_id)?.name};
   if (row.submission_id) {
     return json({plant, state:row.published_at ? 'published' : 'review',
       name:row.submitted_name, letter:row.submitted_body});
@@ -341,7 +365,7 @@ async function moderate(request, env, url, id) {
       (published ? ' ORDER BY published_at DESC, id' : ' ORDER BY created_at, id') + ' LIMIT 21 OFFSET ?'
     ).bind(page * 20).all();
     return json({more:result.results.length > 20, letters:result.results.slice(0, 20).map((row) =>
-      ({...row, plantName:plantNames.get(row.plant_id)}))});
+      ({...row, plantName:plants.get(row.plant_id)?.name}))});
   }
   if (id && request.method === 'POST') {
     const data = await readJson(request);
@@ -388,7 +412,7 @@ export default {
             'WHERE published_at IS NOT NULL ORDER BY published_at DESC, plant_id LIMIT 1) AS latest ' +
             'FROM letter_submissions WHERE published_at IS NOT NULL'
           ).first();
-          return json({published:row.published, waiting:plantNames.size - row.published, latestPlant:row.latest});
+          return json({published:row.published, waiting:plants.size - row.published, latestPlant:row.latest});
         }
         if (path === '/api/cartas/publicadas' && request.method === 'GET') {
           const {results} = await env.DB.prepare(
@@ -400,7 +424,7 @@ export default {
         const publicLetter = path.match(/^\/api\/cartas\/(\d{1,4})$/);
         if (publicLetter) {
           const id = Number(publicLetter[1]);
-          if (!plantNames.has(id)) return json({error:'Planta não encontrada.'}, 404);
+          if (!plants.has(id)) return json({error:'Planta não encontrada.'}, 404);
           if (request.method === 'GET') return json(await letterState(env, id));
           if (request.method === 'POST') {
             return mailEnabled(env) ? await reserveWriting(request, env, id) : await submit(request, env, id);

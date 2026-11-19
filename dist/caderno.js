@@ -42,9 +42,22 @@ function submitted(state) {
   letter.readOnly = true;
   author.readOnly = true;
   save.hidden = submit.hidden = get('hint').hidden = true;
-  status.textContent = state === 'published' ? 'Sua carta foi publicada.' : 'Sua carta foi enviada para revisão.';
-  status.tabIndex = -1;
-  status.focus();
+  status.textContent = '';
+  const published = state === 'published';
+  const title = get('confirmation-title');
+  title.textContent = published ? 'Sua carta foi publicada!' : 'Sua carta foi enviada!';
+  get('confirmation-message').textContent = published ? 'Ela já pode ser lida no guia.' :
+    'Ela foi recebida e está na fila de revisão editorial. Você pode reabrir este caderno pelo link do e-mail para acompanhar.';
+  const link = get('confirmation-link');
+  link.href = get('back').href;
+  if (published) {
+    const url = new URL(link.href);
+    url.searchParams.set('carta', url.hash.split('/').at(-1));
+    link.href = url.href;
+    link.textContent = 'Ler sua carta no guia';
+  }
+  get('confirmation').hidden = false;
+  title.focus();
 }
 
 async function persist(action) {
@@ -56,7 +69,8 @@ async function persist(action) {
   }
   save.disabled = submit.disabled = true;
   letter.readOnly = author.readOnly = true;
-  status.textContent = action === 'save' ? 'Salvando…' : 'Enviando…';
+  status.textContent = action === 'save' ? 'Salvando…' : 'Enviando sua carta para revisão…';
+  if (action === 'submit') submit.textContent = 'Enviando…';
   try {
     const data = await desk(action, {name:author.value, letter:letter.value, version});
     if (data.state === 'draft') {
@@ -74,6 +88,7 @@ async function persist(action) {
   } finally {
     if (!save.hidden) letter.readOnly = author.readOnly = false;
     save.disabled = submit.disabled = expired;
+    submit.textContent = 'Enviar para publicação';
   }
 }
 
