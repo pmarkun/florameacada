@@ -59,7 +59,7 @@ main{max-width:1240px;margin:0 auto;padding:36px 42px 34px;min-height:76vh} .boo
 .letter-ornament{display:block;width:max-content;margin:0 0 8px;color:#8e6646;font-size:11px}
 .letter-page h2{font:italic 600 clamp(32px,4vw,49px)/1 var(--serif);margin:0 0 19px;color:#383e2e}
 .letter-copy p,.letter-invite{font:600 clamp(23px,2.2vw,28px)/1.36 var(--serif);margin:0 0 14px;color:#27372e;white-space:pre-line}
-.letter-copy p:first-child:first-letter{font-size:1.34em}.letter-byline,.letter-note{color:#575840;font-size:15px}
+.letter-copy > p:first-child:first-letter{font-size:1.34em}.letter-byline,.letter-note{color:#575840;font-size:15px}
 .ink-button{background:#254636;color:#fff4d8;border-color:#254636}.ink-button:hover{background:#365b47}
 .claim-panel summary{list-style:none;cursor:pointer}.claim-panel summary::-webkit-details-marker{display:none}
 .claim-form{display:grid;gap:10px;border:1px solid #cdbf9e;background:#f5ead2;padding:16px;margin-top:12px;max-width:475px}
@@ -146,11 +146,17 @@ main{max-width:1240px;margin:0 auto;padding:36px 42px 34px;min-height:76vh} .boo
 .letter-page-invite {text-align:center}
 .letter-page-invite .letter-ornament {margin-inline:auto}
 .letter-page-invite .letter-invite {margin-inline:auto}
-.letter-ellipsis {
-  border:0;background:none;color:#254636;font:inherit;font-weight:700;
-  padding:5px .3em;line-height:1;text-decoration:underline;text-underline-offset:.15em
+.letter-copy.is-collapsed > p:last-of-type {
+  margin-bottom:4px;
+  mask-image:linear-gradient(to bottom, #000 calc(100% - 1.8em), #0007);
 }
-.letter-ellipsis:hover {color:#783a2b}
+.letter-toggle {
+  min-height:44px;padding:0 8px;margin-left:-8px;
+  border:0;background:none;color:#355544;font:600 15px/1.3 var(--sans);
+  text-decoration:underline;text-decoration-color:#849281;text-underline-offset:.23em;
+  overflow-anchor:none;
+}
+.letter-toggle:hover {color:#783a2b;text-decoration-color:currentColor}
 
 /* A capa de Cartas à Flora e o envelope da prancha. */
 .correspondence-book {

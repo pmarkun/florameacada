@@ -1,5 +1,5 @@
-const cacheName = 'flora-2026-cartas-a-flora-9';
-const assets = ["/prazo.js?v=1", "/guia.js?v=cartas-a-flora-9", "/botanica.json", "/catalogo.json", "/fonte-181da826c7.woff2", "/fonte-b23589aa84.woff2", "/fonte-d9ec821052.woff2", "/fonts.css", "/grain.webp", "/icone-192.png", "/icone-512.png", "/index.html", "/jucara.webp", "/mapa-brasil.json", "/manifest.webmanifest", "/plate.webp", "/pranchas.json?v=2", "/reflora-rb.json?v=1", "/reflora-preview.js?v=2", "/guia.css?v=cartas-a-flora-9"];
+const cacheName = 'flora-2026-cartas-a-flora-10';
+const assets = ["/prazo.js?v=1", "/guia.js?v=cartas-a-flora-10", "/botanica.json", "/catalogo.json", "/fonte-181da826c7.woff2", "/fonte-b23589aa84.woff2", "/fonte-d9ec821052.woff2", "/fonts.css", "/grain.webp", "/icone-192.png", "/icone-512.png", "/index.html", "/jucara.webp", "/mapa-brasil.json", "/manifest.webmanifest", "/plate.webp", "/pranchas.json?v=2", "/reflora-rb.json?v=1", "/reflora-preview.js?v=2", "/guia.css?v=cartas-a-flora-10"];
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(cacheName).then((cache) => cache.addAll(assets)).then(() => self.skipWaiting()));
 });

@@ -331,24 +331,33 @@ function showLetter(section, id, label, data) {
     const hasGreeting = /^(cara|caro|querida|querido|olá|oi|prezada|prezado)\b[^\n]{0,100}[,!:]$/iu.test(paragraphs[0]);
     const preview = paragraphs.splice(0, hasGreeting ? 2 : 1);
     const fullLink = new URLSearchParams(location.search).get('carta') === String(id);
-    const toggleMarkup = paragraphs.length ?
-      ' <button type="button" class="letter-ellipsis" aria-label="Expandir carta" aria-expanded="false" aria-controls="letter-full">...</button>' : '';
+    const hasMore = paragraphs.length > 0;
+    const collapsed = hasMore && !fullLink;
     const byline = data.author ? '<p class="letter-byline">Por ' + esc(data.author) + '</p>' : '';
-    section.innerHTML = byline + '<div class="letter-copy">' + preview.map((paragraph, index) =>
-      '<p>' + esc(paragraph) + (index === preview.length - 1 ? toggleMarkup : '') + '</p>').join('') +
-      (paragraphs.length ? '<div id="letter-full" hidden>' + paragraphs.map((paragraph) =>
-        '<p>' + esc(paragraph) + '</p>').join('') + '</div>' : '') + '</div>';
+    section.innerHTML = byline + '<div class="letter-copy' + (collapsed ? ' is-collapsed' : '') + '">' +
+      preview.map((paragraph) => '<p>' + esc(paragraph) + '</p>').join('') +
+      (hasMore ? '<div id="letter-full"' + (collapsed ? ' hidden' : '') + '>' +
+        paragraphs.map((paragraph, index) => (index === 0 ? '<p tabindex="-1">' : '<p>') +
+          esc(paragraph) + '</p>').join('') + '</div>' : '') + '</div>' +
+      (hasMore ? '<button type="button" class="letter-toggle" aria-expanded="' + String(!collapsed) +
+        '" aria-controls="letter-full">' + (collapsed ? 'Ler mais' : 'Ler menos') + '</button>' : '');
 
-    const toggle = section.querySelector('.letter-ellipsis');
-    if (toggle) {
+    if (hasMore) {
+      const copy = section.querySelector('.letter-copy');
+      const toggle = section.querySelector('.letter-toggle');
       const rest = section.querySelector('#letter-full');
       toggle.onclick = () => {
         const expanded = rest.hidden;
         rest.hidden = !expanded;
+        copy.classList.toggle('is-collapsed', !expanded);
         toggle.setAttribute('aria-expanded', String(expanded));
-        toggle.setAttribute('aria-label', expanded ? 'Recolher carta' : 'Expandir carta');
+        toggle.textContent = expanded ? 'Ler menos' : 'Ler mais';
+        if (expanded) {
+          rest.firstElementChild.focus({preventScroll:true});
+        } else {
+          toggle.scrollIntoView({block:'nearest'});
+        }
       };
-      if (fullLink) toggle.click();
     }
     if (fullLink) page.scrollIntoView({block:'start'});
     return;
